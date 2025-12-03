@@ -1,5 +1,6 @@
 from datetime import datetime
 import time
+import traceback
 from google.api_core.exceptions import DeadlineExceeded
 
 from dotenv import load_dotenv
@@ -341,7 +342,6 @@ class FirestoreInvoiceService:
                 })
                 
             except Exception as e:
-                import traceback
                 print(f"Error processing product {product_id_str}: {e}")
                 print(traceback.format_exc())
 
@@ -373,7 +373,6 @@ class FirestoreInvoiceService:
                     "items": data["items"]
                 })
             except Exception as e:
-                import traceback
                 print(f"Error adjusting master product {master_id}: {e}")
                 print(traceback.format_exc())
                 adjustments.append({
