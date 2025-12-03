@@ -84,7 +84,7 @@ export class OfflineInvoicesListComponent implements OnInit {
 
     try {
       await firstValueFrom(this.invoiceService.addInvoiceToFirestore(invoice));
-      await this.invoiceService.ensureInvoiceOnHandSynced(invoice, this.groupedProducts);
+      await this.invoiceService.ensureInvoiceOnHandSynced(invoice, this.groupedProducts, { localOnly: true });
       await this.invoiceService.deleteOfflineInvoice(invoice.id);
       await this.loadOfflineInvoices(); // Reload list
       await this.kiotvietService.updateOnHandFromInvoiceToKiotviet(invoice, this.groupedProducts);
@@ -111,7 +111,7 @@ export class OfflineInvoicesListComponent implements OnInit {
     for (const invoice of this.offlineInvoices) {
       try {
         await firstValueFrom(this.invoiceService.addInvoiceToFirestore(invoice));
-        await this.invoiceService.ensureInvoiceOnHandSynced(invoice, this.groupedProducts);
+        await this.invoiceService.ensureInvoiceOnHandSynced(invoice, this.groupedProducts, { localOnly: true });
         await this.invoiceService.deleteOfflineInvoice(invoice.id);
         await this.kiotvietService.updateOnHandFromInvoiceToKiotviet(invoice, this.groupedProducts);
         successCount++;

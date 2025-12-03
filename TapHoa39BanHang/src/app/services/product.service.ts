@@ -1349,7 +1349,8 @@ export class ProductService {
     groupedProducts: { [x: string]: unknown; [x: number]: unknown[]; },
     _manuallyEditedIds: Set<number>,
     operation: 'decrease' | 'increase' = 'decrease',
-    currentOnHandOverride?: Map<number, number>
+    currentOnHandOverride?: Map<number, number>,
+    options?: { skipRemote?: boolean }
   ): Promise<any> {
     // ✅ Lấy OnHand hiện tại từ IndexedDB để đảm bảo đồng bộ với confirmEditOnHand
 
@@ -1426,25 +1427,61 @@ export class ProductService {
 
     console.log('🔄 Cập nhật OnHand cho Firestore:', updatePayload);
 
+    const payloadAsUpdatedProducts = updatePayload.map(item => ({
+      Id: item.productId,
+      new_OnHand: item.newOnHand
+    }));
+
+    if (options?.skipRemote) {
+      await this.applyUpdatedProductsToIndexedDB(payloadAsUpdatedProducts);
+      return {
+        skippedRemote: true,
+        updated_products: payloadAsUpdatedProducts
+      };
+    }
+
     try {
       const response = await this.http.put(`${environment.domainUrl}/api/firebase/products/update_onhand_batch`, updatePayload).toPromise() as any;
-      
-      // ✅ NEW: Cập nhật IndexedDB ngay sau khi nhận response từ backend
-      if (response && response.updated_products && Array.isArray(response.updated_products)) {
-        console.log('✅ Cập nhật IndexedDB từ response:', response.updated_products);
-        for (const updatedItem of response.updated_products) {
-          try {
-            await this.updateProductOnHandLocal(updatedItem.Id, updatedItem.new_OnHand);
-          } catch (error) {
-            console.error(`❌ Lỗi cập nhật IndexedDB cho product ${updatedItem.Id}:`, error);
-          }
-        }
-      }
-      
+
+      const updatedProducts = Array.isArray(response?.updated_products) && response.updated_products.length > 0
+        ? response.updated_products
+        : payloadAsUpdatedProducts;
+
+      await this.applyUpdatedProductsToIndexedDB(updatedProducts);
+
       return response;
     } catch (error) {
       console.error('❌ Lỗi khi gọi API update_onhand_batch:', error);
       throw error;
+    }
+  }
+
+  private async applyUpdatedProductsToIndexedDB(
+    updatedProducts: Array<{ Id?: number; productId?: number; new_OnHand?: number; newOnHand?: number; OnHand?: number; onHand?: number }>
+  ): Promise<void> {
+    if (!Array.isArray(updatedProducts) || updatedProducts.length === 0) {
+      return;
+    }
+
+    for (const updatedItem of updatedProducts) {
+      const productId = Number(
+        updatedItem?.Id ??
+        updatedItem?.productId ??
+        (updatedItem as any)?.ProductId
+      );
+
+      const nextOnHandRaw = updatedItem?.new_OnHand ?? updatedItem?.newOnHand ?? updatedItem?.OnHand ?? updatedItem?.onHand;
+      const nextOnHand = Number(nextOnHandRaw);
+
+      if (!Number.isFinite(productId) || !Number.isFinite(nextOnHand)) {
+        continue;
+      }
+
+      try {
+        await this.updateProductOnHandLocal(productId, nextOnHand);
+      } catch (error) {
+        console.error(`❌ Lỗi cập nhật IndexedDB cho product ${productId}:`, error);
+      }
     }
   }
 
