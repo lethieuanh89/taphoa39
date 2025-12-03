@@ -272,6 +272,10 @@ class FirestoreInvoiceService:
         Adjust product OnHand based on invoice cart items.
         direction: 1 for decrease (add invoice), -1 for restore (delete/reduce invoice)
         Returns dict with adjustment details
+        
+        This function handles ConversionValue to properly adjust inventory for products
+        with multiple units (e.g., crates vs. cans). It groups adjustments by MasterUnitId
+        to ensure master products get the correctly converted quantities.
         """
         if invoice is None or not isinstance(invoice, dict):
             return {"updated": False, "reason": "invalid_invoice", "adjustments": []}
@@ -283,7 +287,10 @@ class FirestoreInvoiceService:
         if not cart_items:
             return {"updated": False, "reason": "no_cart_items", "adjustments": []}
 
-        adjustments = []
+        # Group adjustments by master product ID
+        # Key: master product ID (or own ID if no master), Value: total quantity in master units
+        master_adjustments = {}
+        
         for item in cart_items:
             product_data = item.get('product') or {}
             product_id = product_data.get('Id') or product_data.get('id') or item.get('productId')
@@ -298,24 +305,76 @@ class FirestoreInvoiceService:
                 if not product_doc:
                     continue
 
+                # Get ConversionValue (default to 1 if not present or invalid)
+                conversion_value = self.safe_float(product_doc.get('ConversionValue'))
+                if conversion_value <= 0:
+                    conversion_value = 1.0
+                
+                # Calculate quantity in master units
+                master_quantity = quantity * conversion_value
+                
+                # Determine which product to adjust (master or self)
+                master_unit_id = product_doc.get('MasterUnitId')
+                if master_unit_id is not None:
+                    # This is a child unit, adjust the master product
+                    target_product_id = str(master_unit_id)
+                else:
+                    # This is a master unit or standalone product, adjust itself
+                    target_product_id = product_id_str
+                
+                # Accumulate adjustments for the same master product
+                if target_product_id not in master_adjustments:
+                    master_adjustments[target_product_id] = {
+                        "total_quantity": 0.0,
+                        "items": []
+                    }
+                
+                master_adjustments[target_product_id]["total_quantity"] += master_quantity
+                master_adjustments[target_product_id]["items"].append({
+                    "productId": product_id_str,
+                    "quantity": quantity,
+                    "conversionValue": conversion_value,
+                    "masterQuantity": master_quantity
+                })
+                
+            except Exception as e:
+                import traceback
+                print(f"Error processing product {product_id_str}: {e}")
+                print(traceback.format_exc())
+
+        # Now apply the grouped adjustments to master products
+        adjustments = []
+        for master_id, data in master_adjustments.items():
+            try:
+                product_doc = product_service.read_product(master_id)
+                if not product_doc:
+                    adjustments.append({
+                        "productId": master_id,
+                        "error": "Master product not found"
+                    })
+                    continue
+
                 current_onhand = self.safe_float(product_doc.get('OnHand'))
+                total_adjustment = data["total_quantity"]
+                
                 # direction=1: decrease (invoice added), so new = current - quantity
                 # direction=-1: restore (invoice deleted), so new = current + quantity
-                new_onhand = max(0, current_onhand - (direction * quantity))
+                new_onhand = max(0, current_onhand - (direction * total_adjustment))
                 
-                product_service.update_product(product_id_str, {"OnHand": new_onhand})
+                product_service.update_product(master_id, {"OnHand": new_onhand})
                 adjustments.append({
-                    "productId": product_id_str,
+                    "productId": master_id,
                     "old_onhand": current_onhand,
                     "new_onhand": new_onhand,
-                    "quantity_adjusted": direction * quantity,
+                    "quantity_adjusted": direction * total_adjustment,
+                    "items": data["items"]
                 })
             except Exception as e:
                 import traceback
-                print(f"Error adjusting product {product_id_str}: {e}")
+                print(f"Error adjusting master product {master_id}: {e}")
                 print(traceback.format_exc())
                 adjustments.append({
-                    "productId": product_id_str,
+                    "productId": master_id,
                     "error": str(e),
                 })
 

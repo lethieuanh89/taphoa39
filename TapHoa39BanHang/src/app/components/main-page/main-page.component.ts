@@ -2721,11 +2721,8 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     };
     // Gửi lên Firestore
     try {
-      await firstValueFrom(this.orderService.addOrderToFirestore(order));
-      // Phát WebSocket real-time (nếu muốn)
+      // notifyOrderCreated already calls addOrderToFirestore internally, no need to call it separately
       await this.orderService.notifyOrderCreated(order);
-      // Lưu vào IndexedDB (để đồng bộ offline)
-      await this.orderService.addOrderToDB(order);
       alert('Đã lưu đơn đặt hàng!');
     } catch (err) {
       // Nếu lỗi, chỉ lưu local
@@ -2870,12 +2867,6 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       this.formattedCustomerPaid = '0';
       this.invoiceNote = '';
 
-      // Optionally notify realtime
-      if (typeof (this.invoiceService as any).notifyInvoiceUpdated === 'function') {
-        try {
-          await (this.invoiceService as any).notifyInvoiceUpdated(updatedOrder);
-        } catch (e) { /* ignore */ }
-      }
     } catch (error) {
       console.error('❌ Error saving edited order:', error);
       alert('Lỗi khi lưu chỉnh sửa đơn hàng!');
