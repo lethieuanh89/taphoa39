@@ -311,7 +311,10 @@ class FirestoreInvoiceService:
                     conversion_value = 1.0
                 
                 # Calculate quantity in master units
-                master_quantity = quantity * conversion_value
+                # ConversionValue represents how many child units equal 1 master unit
+                # e.g., ConversionValue=24 means 24 cans = 1 crate
+                # So to convert child quantity to master: quantity / ConversionValue
+                master_quantity = quantity / conversion_value
                 
                 # Determine which product to adjust (master or self)
                 master_unit_id = product_doc.get('MasterUnitId')
