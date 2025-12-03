@@ -2722,6 +2722,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     // Gửi lên Firestore
     try {
       // notifyOrderCreated already calls addOrderToFirestore internally, no need to call it separately
+      // It also calls addOrderToDB in all code paths, preserving offline functionality
       await this.orderService.notifyOrderCreated(order);
       alert('Đã lưu đơn đặt hàng!');
     } catch (err) {
