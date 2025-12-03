@@ -1,0 +1,33 @@
+export interface Customer {
+    Code: string;
+    CompareCode: string;
+    CompareName: string;
+    ContactNumber: string;
+    CreatedBy: number;
+    CreatedDate: Date;
+    CreatedName: string;
+    CustomerType: string;
+    Debt: number;
+    GenderName: string;
+    Groups: string;
+    Id: number;
+    InvoiceCount: number;
+    Invoices: any[];
+    IsActive: boolean;
+    LastTradingDate: Date;
+    ModifiedDate: Date;
+    MustUpdateDebt: boolean;
+    MustUpdatePoint: boolean;
+    Name: string;
+    Orders: any[];
+    Organization: string;
+    RetailerId: number;
+    Returns: any[];
+    RewardPoint: number;
+    TotalInvoiced: number;
+    TotalPoint: number;
+    TotalReturn: number;
+    TotalRevenue: number;
+    Uuid: string;
+    isDeleted: boolean;
+}

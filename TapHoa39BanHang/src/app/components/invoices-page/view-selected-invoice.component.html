@@ -1,0 +1,103 @@
+<!-- Sync Status Bar (REST) -->
+<div class="websocket-status-bar">
+  <div class="status-indicators">
+    <span class="status-item rest-sync" title="Polling / Manual sync">
+      <mat-icon>cloud_sync</mat-icon>
+      REST sync
+    </span>
+    <span class="status-item">
+      <mat-icon>schedule</mat-icon>
+      Cập nhật: {{ getLastUpdateTime() }}
+    </span>
+    <span class="status-item">
+      <mat-icon>access_time</mat-icon>
+      {{ getInvoiceAge() }}
+    </span>
+  </div>
+  <div class="sync-actions">
+    <button mat-button (click)="refreshInvoiceData()" [disabled]="isDeleting" class="refresh-button">
+      <mat-icon>refresh</mat-icon>
+      Làm mới
+    </button>
+  </div>
+</div>
+
+<h6 class='title' mat-dialog-title>
+  Chi tiết hóa đơn - {{data.invoices.id}}
+  <span class="invoice-status" *ngIf="isRecentInvoice()">
+    <mat-icon class="recent-icon">new_releases</mat-icon>
+    Mới tạo
+  </span>
+  <br>
+  <span class="customer-info">
+    Khách hàng : &nbsp;&nbsp; {{data.invoices.customer?.Name|| 'Khách lẻ'}} &nbsp;&nbsp;
+    {{data.invoices.customer?.ContactNumber}}
+  </span>
+</h6>
+
+<mat-dialog-content>
+  <!-- Loading indicator for delete operation -->
+  <div *ngIf="isDeleting" class="deleting-overlay">
+    <div class="spinner"></div>
+    <p>Đang xóa hóa đơn...</p>
+  </div>
+
+  <table class="item-table" *ngIf="data.cartItems.length">
+    <thead>
+      <tr>
+        <th style="text-align: left;">Tên sản phẩm</th>
+        <th style="text-align: center;">Số lượng</th>
+        <th style="text-align: end;">Giá gốc</th>
+        <th style="text-align: right;">Giá bán</th>
+        <th style="text-align: end;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of data.cartItems">
+        <td>{{ item.product.FullName }}</td>
+        <td style="text-align: center;">{{ item.quantity }}</td>
+        <td style="text-align: end;"><s *ngIf="item.unitPriceSaleOff>0">{{
+                formatVnd(item.unitPrice+item.unitPriceSaleOff)||'' }}</s></td>
+        <td style="text-align: end;">{{ formatVnd(item.unitPrice ) }}</td>
+        <td class="txt">{{ formatVnd(item.totalPrice) }}</td>
+      </tr>
+      <tr style="border-top: 3px dotted rgb(0, 0, 0);">
+        <td style="color: rgb(221, 127, 72);">Giảm giá:</td>
+        <td colspan="4" style="color: rgb(221, 127, 72);text-align: end;">
+          - {{formatVnd(data.invoices.discountAmount)}}
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Tổng cộng:</td>
+        <td style="font-weight: bold; text-align: center;">{{ getTotalQuantity() | number:'1.0-0' }}</td>
+        <td colspan="3" style="font-weight: bold; text-align: end;">{{ formatVnd(getTotalPrice()) }}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;color:red">Nợ:</td>
+        <td colspan="4" style="font-weight: bold; color:red;text-align: end;">{{ formatVnd(data.invoices.debt)
+          }}</td>
+      </tr>
+      <tr style="font-size: 11px;font-style: italic;">
+        <td style="font-weight: bold">Ghi chú:</td>
+        <td colspan="4" style="font-weight: bold; color:rgb(134, 133, 133);text-align: end;">{{
+          data.invoices.note }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!data.cartItems.length">Không có sản phẩm trong hóa đơn.</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="center">
+  <button mat-button (click)="close()" class="buttons">Đóng</button>
+
+  <!-- Yellow edit button: Sửa hóa đơn -->
+  <button mat-button (click)="editInvoice()" class="buttons" style="background:#ffd600;color:#333;font-weight:bold;margin:0 8px;">
+    <mat-icon>edit</mat-icon>
+    Sửa hóa đơn
+  </button>
+
+  <button mat-button (click)="deleteInvoice()" [disabled]="isDeleting" class="buttons delete-button">
+    <mat-icon>delete</mat-icon>
+    {{ isDeleting ? 'Đang xóa...' : 'Xóa hóa đơn' }}
+  </button>
+</mat-dialog-actions>

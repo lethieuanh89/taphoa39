@@ -1,0 +1,37 @@
+<div class="search-section" (document:keydown.escape)="closeDropdown()" (focusout)="closeDropdown()">
+  <input #searchInput matInput
+         (focus)="onSearchFieldFocus()"
+         type="text"
+         [ngModel]="searchTerm"
+         (ngModelChange)="onSearchTermChange($event)"
+         (input)="onSearchInput($event)"
+         (keydown)="onKeyDown($event)"
+         placeholder="Tìm hàng hóa (F3)"
+         class="search-input"
+         tabindex="1" />
+  <i class="fa-solid fa-magnifying-glass search-icon"></i>
+
+  <div class="dropdown"
+       *ngIf="showDropdown && filteredProducts.length > 0"
+       (mousedown)="$event.preventDefault()"
+       #dropdownContainer>
+    <div class="dropdown-item"
+         *ngFor="let product of filteredProducts; let i = index"
+         (click)="selectProduct(product)"
+         [class.active]="i === activeIndex"
+         #itemRefs>
+      <div class="product-info">
+        <div class="product-name">{{ product.FullName || product.Name }}</div>
+        <div class="product-details">
+          <img class="thumbnail" [src]="product.Image" />
+          <span>{{ product.Code }}</span>
+          <span>Tồn: {{ product.OnHand }}</span>
+        </div>
+      </div>
+      <div class="product-price">{{ formatPrice(product.BasePrice) }}</div>
+    </div>
+    <div class="add-new-item" (click)="addNewProduct()">
+      + Thêm mới hàng hóa
+    </div>
+  </div>
+</div>

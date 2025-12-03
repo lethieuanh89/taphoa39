@@ -1,0 +1,15 @@
+<div class="login-container">
+  <form (ngSubmit)="login()" autocomplete="off">
+    <h2>Đăng nhập đến Tạp Hóa 39</h2>
+    <div class="form-group">
+      <label for="username">Tài khoản</label>
+      <input id="username" name="username" [(ngModel)]="username" required autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label for="password">Mật khẩu</label>
+      <input id="password" name="password" type="password" [(ngModel)]="password" required autocomplete="current-password" />
+    </div>
+    <div class="error" *ngIf="error">{{ error }}</div>
+    <button type="submit" [disabled]="isLoading">{{ isLoading ? 'Đang đăng nhập...' : 'Đăng nhập' }}</button>
+  </form>
+</div>

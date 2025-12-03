@@ -1,0 +1,86 @@
+mat-toolbar button.mat-button {
+    font-size: 16px;
+    padding: 8px 16px;
+}
+
+/* Khi màn hình nhỏ hơn 1600px */
+@media (max-width: 1600px) {
+    mat-toolbar button.mat-button {
+        font-size: 14px;
+        padding: 6px 12px;
+    }
+}
+
+/* Khi màn hình rất nhỏ, ví dụ nhỏ hơn 1200px */
+@media (max-width: 1200px) {
+    mat-toolbar button.mat-button {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+}
+
+mat-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    /* Khoảng cách giữa các nút */
+}
+
+.clear-cache-button,
+.save-button,
+.update-button,
+.ton-kho-button,
+.send-data-to-kiotviet {
+    background-color: #00b63e;
+    color: white !important;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 5px;
+    margin-left: 10px;
+    font-size: 16px;
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.save-button:hover,
+.ton-kho-button:hover,
+.update-button:hover,
+.send-data-to-kiotviet:hover,
+.clear-cache-button:hover,
+.add-product-button:hover {
+    background-color: #006d25;
+    /* Màu xanh dương đậm hơn khi hover */
+    transform: scale(1.05);
+    /* Hiệu ứng phóng to nhẹ khi hover */
+}
+
+.save-button:active,
+.ton-kho-button:active,
+.update-button:active,
+.send-data-to-kiotviet:active,
+.clear-cache-button:active,
+.add-product-button:active {
+    background-color: #006d25;
+    /* Màu xanh lá đậm hơn khi nhấn */
+    transform: scale(0.9);
+    /* Hiệu ứng thu nhỏ nhẹ khi nhấn */
+    color: white;
+}
+
+.add-product-button {
+    /* Float the add button at the bottom-right corner of the viewport
+       so it stays near the screen edge regardless of container layout. */
+    position: fixed;
+    right: 16px;
+    padding: 10px 18px;
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.12);
+    background-color: #00b63e;
+    color: white !important;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 5px;
+    margin-left: 10px;
+    font-size: 16px;
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}

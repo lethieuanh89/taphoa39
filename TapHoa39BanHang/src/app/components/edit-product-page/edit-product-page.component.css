@@ -1,0 +1,342 @@
+.voice-icon {
+  position: relative;
+  bottom: 7px;
+}
+
+.custom-input {
+  transition: box-shadow 0.2s ease, background-color 0.3s ease;
+}
+
+.sync-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background-color: #fff3cd;
+  color: #5f3a00;
+  font-size: 13px;
+  border-left: 4px solid #ff9800;
+}
+
+.sync-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ff9800;
+  animation: syncPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes syncPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+}
+
+.custom-input.tabbed {
+  animation: highlightFlash 0.5s ease;
+}
+
+@keyframes highlightFlash {
+  from {
+    background-color: #1a69a5;
+  }
+
+  to {
+    background-color: rgb(255, 255, 255);
+  }
+}
+
+.option-image {
+  width: 30px;
+  height: 40px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.table.td.img-tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.thumbnail {
+  width: 50px;
+  height: 40px;
+  object-fit: cover;
+  cursor: pointer;
+  border-radius: 4px;
+  padding-left: 10px;
+  padding-top: 5px;
+}
+
+.tooltip-img {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 50px;
+  z-index: 999;
+  padding: 4px;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tooltip-img img {
+  max-width: 300px;
+  max-height: 300px;
+  border-radius: 4px;
+}
+
+/* Hover hiển thị ảnh lớn */
+.img-tooltip-wrapper:hover .tooltip-img {
+  display: block;
+}
+
+.mat-header-cell {
+  font-weight: bold;
+  cursor: pointer;
+  /* Thêm con trỏ để hiển thị rằng cột có thể sắp xếp */
+}
+
+.mat-sort-header-arrow {
+  color: #3f51b5;
+  /* Màu sắc của mũi tên sắp xếp */
+}
+
+.mat-cell {
+  color: #000000;
+  /* Màu chữ mặc định */
+  transition: background-color 1s ease;
+  /* Hiệu ứng chuyển màu */
+}
+
+.mat-header-cell {
+  font-weight: bold;
+  background-color: #f5f5f5;
+  /* Màu nền tiêu đề */
+}
+
+.input-field {
+  text-align: center;
+  width: 70px;
+  height: 40px;
+  padding: 1px;
+  border: 0px solid #4b6580;
+  border-radius: 5px;
+  /* box-sizing: border-box; */
+  /* Đảm bảo padding không làm tăng kích thước tổng thể */
+}
+
+.warning-icon {
+
+  position: absolute;
+  top: -10px;
+  right: -25px;
+  width: 10px;
+  height: 10px;
+  background-color: red;
+  border-radius: 50%;
+  border: 1px solid white;
+}
+
+
+/* Làm mờ nội dung phía sau khi đang tải */
+.blur {
+  filter: blur(5px);
+  /* Làm mờ nội dung */
+  pointer-events: none;
+  /* Vô hiệu hóa tương tác */
+}
+
+
+
+/* Cố định chiều cao cho bảng sản phẩm */
+.product-table {
+  max-height: calc(100vh - 0px);
+  /* Chiều cao tối đa của bảng, trừ đi phần header */
+  overflow-y: auto;
+  /* Cho phép cuộn dọc */
+  overflow-x: auto;
+  /* Cho phép cuộn ngang nếu cần */
+  border: 1px solid #ddd;
+  /* Đường viền cho bảng */
+}
+
+/* Đảm bảo tiêu đề bảng luôn cố định */
+.product-table table {
+  border-collapse: collapse;
+}
+
+.product-table th {
+  position: sticky;
+  top: 0;
+  background-color: #f9f9f9;
+  /* Màu nền cho tiêu đề bảng */
+  z-index: 5;
+  /* Đảm bảo tiêu đề luôn nằm trên nội dung */
+  border-bottom: 1px solid #ddd;
+}
+
+.product-table th.highlight {
+  color: #ffffff;
+  /* Màu chữ đậm hơn */
+  background-color: #4090ec;
+  /* Màu nền cho tiêu đề bảng */
+  padding: 10px;
+  /* Padding cho tiêu đề bảng */
+}
+
+.icon {
+  background: url(https://i.imgur.com/G8sjWbN.jpeg) no-repeat;
+  background-size: contain;
+  width: 5vw;
+  /* Adjust width relative to viewport width */
+  height: 5vh;
+  /* Adjust height relative to viewport height */
+}
+
+/* .pin {
+  display: inline-block;
+  width: 55px;
+  height: 55px;
+  background-image: url(https://i.pinimg.com/originals/0e/33/30/0e3330287169a30f2df9ce0d137f7031.gif) ;
+  background-size: cover;
+  margin-left: 100px;
+} */
+
+/* .pen {
+  display: inline-block;
+  width: 60px;
+  height: 60px;
+  background-image: url(https://images.viblo.asia/a87852d0-d60c-4a7c-ae42-0bfb6679ecb3.gif);
+  background-size: cover;
+} */
+
+/* .poc {
+  display: inline-block;
+  width: 70px;
+  height: 70px;
+  background-image: url(https://i.pinimg.com/originals/7f/10/f3/7f10f39e54aad282f4d3d35a7537b4d3.gif);
+  background-size: cover;
+
+}
+.peo {
+  display: inline-block;
+  width: 80px;
+  height: 60px;
+  background-image: url(https://i.pinimg.com/originals/0b/a8/e2/0ba8e2989811721a348c576a1d24ce77.gif);
+  background-size: cover;
+}
+.pig {
+  display: inline-block;
+  width: 60px;
+  height: 60px;
+  background-image: url('https://i.pinimg.com/originals/44/7a/f5/447af57800e61a0c04cb44be278e097a.gif');
+  background-size: cover;
+  animation: movePig 5s linear infinite; 
+} */
+
+/* @keyframes movePig {
+  0% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(150px);
+  }
+
+  100% {
+    transform: translateX();
+  }
+} */
+
+.taphoa39 {
+  font-family: 'Arial', sans-serif;
+  font-size: 30px;
+  color: #1a99af;
+  padding-left: 100px;
+  text-shadow: 1px 1px 0 #ccc, 2px 2px 0 #ccc, 3px 3px 0 #ccc, 4px 4px 0 #ccc, 3px 3px 0 #ccc;
+}
+
+.search-header {
+  background: #0070F4;
+}
+
+.search-bar {
+  position: absolute;
+  top: 2px;
+  width: 500px !important;
+  height: 30px;
+  margin-left: 60px;
+  display: flex;
+  background-color: #f9f9f9;
+  border-radius: 5px;
+  box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.1);
+  width: 80%;
+}
+
+.main-container {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+
+}
+
+.product-table {
+  width: 100%;
+
+}
+
+.product-table table {
+  width: 100%;
+  border-collapse: collapse;
+  width: 100%;
+  /* Updated width to 100% */
+
+}
+
+.product-table th,
+.product-table td {
+  border: 1px solid #d1d1d1;
+  padding: 5px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.product-table th {
+  background-color: #4b6580;
+  color: #fff;
+}
+
+.cell-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.master-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff9800, #ff5722);
+  box-shadow: 0 0 6px rgba(255, 152, 0, 0.35);
+  letter-spacing: 0.5px;
+}
+
+.master-row td {
+  box-shadow: inset 0 0 0 2px rgba(255, 152, 0, 0.35);
+}

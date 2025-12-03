@@ -1,0 +1,96 @@
+<div class="customer-page-container">
+  <div class="header">
+    <mat-form-field appearance="outline" class="search-field">
+      <mat-label>Theo mã, tên, điện thoại</mat-label>
+      <input matInput (keyup)="applyFilter($event)" placeholder="Tìm kiếm khách hàng...">
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+    <div class="header-actions">
+      <button mat-flat-button (click)="syncCustomers()" [disabled]="isLoading || isSyncing">
+        <mat-icon class="sync-icon" [class.spinning]="isSyncing">sync</mat-icon>
+        Đồng bộ
+      </button>
+      <button mat-flat-button (click)="openAddCustomerDialog()" [disabled]="isLoading">
+        <mat-icon>add</mat-icon>
+        Khách hàng
+      </button>
+      <button mat-flat-button [ngClass]="{'delete-active': getSelectedCount() > 0, 'delete-inactive': getSelectedCount() === 0}" (click)="deleteSelectedCustomers()" [disabled]="getSelectedCount() === 0 || isLoading">
+        <mat-icon>delete</mat-icon>
+        Xóa ({{ getSelectedCount() }})
+      </button>
+    </div>
+  </div>
+
+  <div class="loading-shade" *ngIf="isLoading">
+    <mat-spinner></mat-spinner>
+    <p>Đang tải dữ liệu khách hàng...</p>
+  </div>
+
+  <div class="table-container" [hidden]="isLoading">
+    <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8">
+
+      <!-- Checkbox Column -->
+      <ng-container matColumnDef="select">
+        <th mat-header-cell *matHeaderCellDef>
+          <mat-checkbox (change)="$event ? masterToggle() : null" [checked]="selection.hasValue() && isAllSelected()"
+            [indeterminate]="selection.hasValue() && !isAllSelected()" [aria-label]="checkboxLabel()">
+          </mat-checkbox>
+        </th>
+        <td mat-cell *matCellDef="let row">
+          <mat-checkbox (click)="$event.stopPropagation()" (change)="$event ? selection.toggle(row) : null"
+            [checked]="selection.isSelected(row)" [aria-label]="checkboxLabel(row)">
+          </mat-checkbox>
+        </td>
+        <td mat-footer-cell *matFooterCellDef></td>
+      </ng-container>
+
+      <!-- Customer Code Column -->
+      <ng-container matColumnDef="code">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header> Mã khách hàng </th>
+        <td mat-cell *matCellDef="let row"> {{row.Code}} </td>
+        <td mat-footer-cell *matFooterCellDef></td>
+      </ng-container>
+
+      <!-- Name Column -->
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header> Tên khách hàng </th>
+        <td mat-cell *matCellDef="let row"> {{row.Name}} </td>
+        <td mat-footer-cell *matFooterCellDef><strong>Tổng</strong></td>
+      </ng-container>
+
+
+
+      <!-- Debt Column -->
+      <ng-container matColumnDef="debt">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header class="align-right"> Nợ </th>
+        <td mat-cell *matCellDef="let row" class="align-right" style="color: red;"> {{row.Debt | number}} </td>
+        <td mat-footer-cell *matFooterCellDef class="align-right"><strong>{{totalDebt | number}}</strong></td>
+      </ng-container>
+
+      <!-- Total Spend Column -->
+      <ng-container matColumnDef="totalSpend">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header class="align-right"> Doanh thu </th>
+        <td mat-cell *matCellDef="let row" class="align-right"> {{row.TotalRevenue | number}} </td>
+        <td mat-footer-cell *matFooterCellDef class="align-right"><strong>{{totalSpend | number}}</strong></td>
+      </ng-container>
+      <!-- Purchase Rate Column -->
+      <ng-container matColumnDef="purchaseRate">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header class="align-right"> Điểm thưởng </th>
+        <td mat-cell *matCellDef="let row" class="align-right" style = "color: green;"> {{ row.TotalPoint | number }} </td>
+        <td mat-footer-cell *matFooterCellDef class="align-right"></td>
+      </ng-container>
+
+      <!-- Gift Column -->
+      <ng-container matColumnDef="gift">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header class="align-right"> Quà (5%) </th>
+        <td mat-cell *matCellDef="let row" class="align-right" style = "color: chocolate;"> {{ calculateGiftValue(row) | number }} </td>
+        <td mat-footer-cell *matFooterCellDef class="align-right"></td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row"
+        (click)="openCustomerInvoices(row)"></tr>
+      <tr mat-footer-row *matFooterRowDef="displayedColumns; sticky: true" class="summary-footer"></tr>
+    </table>
+  </div>
+  <mat-paginator [pageSizeOptions]="[10, 25, 100]" showFirstLastButtons [hidden]="isLoading"></mat-paginator>
+</div>

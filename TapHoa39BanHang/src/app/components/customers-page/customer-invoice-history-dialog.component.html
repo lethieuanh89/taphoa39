@@ -1,0 +1,167 @@
+<h2 mat-dialog-title>
+    Hóa đơn của <b>{{ customer.Name || 'Khách hàng' }}</b>
+    <span class="customer-meta" *ngIf="customer.ContactNumber">
+        · {{ customer.ContactNumber }}
+    </span>
+</h2>
+
+<mat-dialog-content class="dialog-shell">
+    <div class="websocket-status-bar">
+        <div class="status-indicators">
+            <span class="status-item" [class.connected]="isOnline" [class.disconnected]="!isOnline">
+                <mat-icon>{{ getConnectionIcon() }}</mat-icon>
+                {{ getConnectionStatus() }}
+            </span>
+            <span class="status-item">
+                <mat-icon>history</mat-icon>
+                Cập nhật: {{ getLastLoadedLabel() }}
+            </span>
+            <span class="status-item" *ngIf="isLoading">
+                <mat-icon class="spinning">sync</mat-icon>
+                Đang đồng bộ...
+            </span>
+        </div>
+    </div>
+
+    <div class="status-summary">
+        <div class="status-item">
+            <mat-icon>receipt_long</mat-icon>
+            <div>
+                <span class="label">Tổng hóa đơn</span>
+                <strong>{{ dataSource.data.length }}</strong>
+            </div>
+        </div>
+        <div class="status-item">
+            <mat-icon>payments</mat-icon>
+            <div>
+                <span class="label">Tổng giá trị</span>
+                <strong>{{ formatCurrency(totalInvoiceAmount) }}</strong>
+            </div>
+        </div>
+        <div class="status-item">
+            <mat-icon>account_balance_wallet</mat-icon>
+            <div>
+                <span class="label">Tổng nợ</span>
+                <strong>{{ formatCurrency(totalInvoiceDebt) }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="filters-section">
+        <div class="filters-wrap">
+            <mat-form-field appearance="outline">
+                <mat-label>Tên hoặc mã sản phẩm</mat-label>
+                <input matInput [(ngModel)]="productSearchTerm" (keyup)="applyFilters()"
+                    placeholder="Tìm theo sản phẩm" />
+                <mat-icon matPrefix>search</mat-icon>
+                <button mat-icon-button matSuffix *ngIf="productSearchTerm"
+                    (click)="productSearchTerm=''; applyFilters()">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+                <mat-label>Tổng tiền (VNĐ)</mat-label>
+                <input matInput type="number" min="0" [(ngModel)]="totalAmount" (ngModelChange)="applyFilters()"
+                    placeholder="0" />
+                <span matSuffix>₫</span>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+                <mat-label>Từ ngày</mat-label>
+                <input matInput [matDatepicker]="pickerStart" [(ngModel)]="startDate" (dateChange)="applyFilters()"
+                    placeholder="Chọn ngày bắt đầu" />
+                <mat-datepicker-toggle matSuffix [for]="pickerStart"></mat-datepicker-toggle>
+                <mat-datepicker #pickerStart></mat-datepicker>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+                <mat-label>Đến ngày</mat-label>
+                <input matInput [matDatepicker]="pickerEnd" [(ngModel)]="endDate" (dateChange)="applyFilters()"
+                    placeholder="Chọn ngày kết thúc" />
+                <mat-datepicker-toggle matSuffix [for]="pickerEnd"></mat-datepicker-toggle>
+                <mat-datepicker #pickerEnd></mat-datepicker>
+            </mat-form-field>
+
+
+        </div>
+
+        <div class="filter-actions">
+            <button mat-button (click)="clearFilters()">
+                <mat-icon>clear_all</mat-icon>
+                Xóa bộ lọc
+            </button>
+        </div>
+    </div>
+
+    <div class="loading-state" *ngIf="isLoading">
+        <mat-spinner></mat-spinner>
+        <p>Đang tải danh sách hóa đơn...</p>
+    </div>
+
+    <div class="error-state" *ngIf="!isLoading && error">
+        <mat-icon color="warn">error_outline</mat-icon>
+        <span>{{ error }}</span>
+    </div>
+
+    <div class="table-wrapper" *ngIf="!isLoading && !error">
+        <table mat-table [dataSource]="dataSource" matSort matSortDisableClear class="invoice-table">
+            <ng-container matColumnDef="id">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header class="sticky">Mã hóa đơn</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell">
+                    <div class="invoice-id">
+                        <span>{{ invoice.id }}</span>
+                        <span class="note" *ngIf="invoice.note">{{ invoice.note }}</span>
+                    </div>
+                </td>
+            </ng-container>
+
+            <ng-container matColumnDef="createdDate">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header class="sticky">Ngày tạo</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell">{{ formatDate(invoice.parsedCreatedDate) }}
+                </td>
+            </ng-container>
+
+            <ng-container matColumnDef="totalQuantity">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header class="sticky">Số lượng</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell">{{ invoice.totalQuantity | number:'1.0-0' }}
+                </td>
+            </ng-container>
+
+            <ng-container matColumnDef="totalPrice">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header class="sticky">Tổng tiền</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell">{{ formatCurrency(invoice.totalPrice) }}
+                </td>
+            </ng-container>
+
+            <ng-container matColumnDef="debt">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header class="sticky">Còn nợ</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell" [class.debt-positive]="invoice.debt > 0">
+                    {{ formatCurrency(invoice.debt) }}
+                </td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef class="sticky sticky-right">Thao tác</th>
+                <td mat-cell *matCellDef="let invoice" class="content-cell actions-cell">
+                    <button mat-icon-button color="primary" matTooltip="Xem chi tiết" (click)="openInvoiceDetail(invoice)">
+                        <mat-icon>visibility</mat-icon>
+                    </button>
+                </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns; trackBy: trackByInvoiceId"></tr>
+        </table>
+        <mat-paginator [length]="dataSource.data.length" [pageSize]="10" [pageSizeOptions]="[10, 20, 50]"
+            showFirstLastButtons>
+        </mat-paginator>
+    </div>
+
+    <div class="empty-state" *ngIf="!isLoading && !error && dataSource.data.length === 0">
+        <mat-icon>receipt_long</mat-icon>
+        <p>Không có hóa đơn nào khớp với bộ lọc hiện tại.</p>
+    </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-button (click)="close()">Đóng</button>
+</mat-dialog-actions>

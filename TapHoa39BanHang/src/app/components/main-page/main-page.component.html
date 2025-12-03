@@ -1,0 +1,209 @@
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <app-product-search
+      [searchTerm]="searchTerm"
+      [showDropdown]="showDropdown"
+      [filteredProducts]="filteredProducts"
+      [activeIndex]="activeIndex"
+      (searchTermChange)="searchTerm = $event"
+      (searchInput)="onSearchInput($event)"
+      (searchFieldFocus)="onSearchFieldFocus()"
+      (keyDown)="onKeyDown($event)"
+      (productSelect)="selectProduct($event)"
+      (addNewProductClick)="addNewProduct()"
+      (dropdownStateChange)="showDropdown = $event"
+      #productSearchComponent>
+    </app-product-search>
+
+    <app-invoice-tabs
+      [invoices]="invoices"
+      [orders]="orders"
+      [activeTabIndex]="activeTabIndex"
+      [activeOrderTabIndex]="activeOrderTabIndex"
+      [isOrderMode]="isOrderMode"
+      [invoiceTabFontSize]="invoiceTabFontSize"
+      [showInvoiceTabNumbersOnly]="showInvoiceTabNumbersOnly"
+      (tabSelect)="setActiveTab($event)"
+      (orderTabSelect)="setActiveOrderTab($event)"
+      (tabRemove)="removeInvoiceTab($event)"
+      (orderTabRemove)="removeOrderTab($event)"
+      (addInvoiceTabClick)="addInvoiceTab()"
+      (addOrderTabClick)="addOrderTab()"
+      (tabWheel)="onTabWheel($event)"
+      #invoiceTabsComponent>
+    </app-invoice-tabs>
+
+    <app-menu-bar
+      [hasOfflineInvoices]="hasOfflineInvoices"
+      [isReloading]="isReloading"
+      [isOrderMode]="isOrderMode"
+      [isPrintEnabled]="isPrintEnabled"
+      [showMenuDropdown]="showMenuDropdown"
+      (offlineInvoicesClick)="openOfflineInvoicesDialog()"
+      (reloadClick)="reload()"
+      (orderModeToggle)="enableOrderMode()"
+      (printToggle)="togglePrint()"
+      (outOfStockClick)="openOutOfStockDialog()"
+      (menuClick)="onMenuClick($event)"
+      (menuDropdownStateChange)="showMenuDropdown = $event"
+      #menuBarComponent>
+    </app-menu-bar>
+  </div>
+  <router-outlet></router-outlet>
+  
+  <!-- Corner loading indicator -->
+  <div *ngIf="isReloading" class="corner-loading" aria-hidden="true">
+    <div class="spinner small"></div>
+    <span class="sr-only">Đang tải dữ liệu...</span>
+  </div>
+
+  <div class="row">
+    <!-- Cart Items -->
+    <app-cart-items
+      [cartItems]="cartItems"
+      [showNoteInputIndex]="showNoteInputIndex"
+      [groupedProducts]="groupedProducts"
+      (itemRemove)="removeItem($event)"
+      (unitChange)="updateItemUnit($event.index, $event.unit)"
+      (quantityChange)="onQuantityChange($event)"
+      (quantityIncrease)="increaseQuantity($event)"
+      (unitPriceInput)="onUnitPriceInput($event.event, $event.item)"
+      (showNoteClick)="showNoteForProduct($event)"
+      (showNoteInputIndexChange)="showNoteInputIndex = $event"
+      (keyDown)="validateNumber($event)"
+      #cartItemsComponent>
+    </app-cart-items>
+    <div>
+      <!-- Summary -->
+      <div class="main-content">
+        <app-customer-search
+          [customerSearchTerm]="customerSearchTerm"
+          [showCustomerDropdown]="showCustomerDropdown"
+          [customerSuggestions]="customerSuggestions"
+          [activeCustomerIndex]="activeCustomerIndex"
+          [selectedCustomer]="selectedCustomer"
+          [selectedCustomerDebtValue]="selectedCustomerDebtValue"
+          [selectedCustomerTotalPointValue]="selectedCustomerTotalPointValue"
+          (customerSearchTermChange)="customerSearchTerm = $event"
+          (customerSearchInput)="onCustomerSearchInput($event)"
+          (customerKeyDown)="onCustomerKeyDown($event)"
+          (customerDelete)="onCustomerDelete($event)"
+          (customerSelect)="selectCustomer($event)"
+          (addCustomerClick)="openAddCustomerDialog()"
+          (dropdownStateChange)="showCustomerDropdown = $event"
+          #customerSearchComponent>
+        </app-customer-search>
+        <div class="summary-section">
+          <div class="summary-row">
+            <span>Tổng tiền hàng:</span>
+            <span>{{ getTotalQuantity() }}</span>
+            <span>{{ formatPrice(getTotalAmount()) }}</span>
+          </div>
+          <div class="summary-row">
+            <span>Giảm giá:</span>
+            <input class="customer-payment" type="number" [(ngModel)]="discountAmount"
+              (keydown)="validateNumber($event)" (ngModelChange)="onDiscountChange()">
+          </div>
+
+          <div class="summary-row total">
+            <span>Khách cần trả:</span>
+            <span class="total-amount">{{ formatPrice(getTotalAmount() - (discountAmount || 0)) }}</span>
+          </div>
+
+          <div class="summary-row">
+            <span>Khách thanh toán:</span>
+            <ng-container *ngIf="!isOrderMode">
+              <input class="customer-payment" type="text"
+                [value]="formatPrice(invoices[activeTabIndex].customerPaid || 0)" (input)="onCustomerPaidChange($event)"
+                (click)="selectIfNotSelected($event)" (keydown)="validateNumber($event)" />
+            </ng-container>
+            <ng-container *ngIf="isOrderMode">
+              <input class="customer-payment" type="text"
+                [value]="formatPrice(orders[activeOrderTabIndex].customerPaid || 0)"
+                (input)="onCustomerPaidChange($event)" (click)="selectIfNotSelected($event)"
+                (keydown)="validateNumber($event)" />
+            </ng-container>
+          </div>
+
+          <div class="summary-row change-amount">
+            <span *ngIf="getChangeAmount() >= 0" style="color: rgb(25, 139, 15);">Số tiền thừa:</span>
+
+            <span *ngIf="getChangeAmount() >= 0" style="color: rgb(25, 139, 15);">
+              {{ formatPrice(getChangeAmount())}}
+              <span *ngIf="getChangeAmount() < 0"
+                style="font-size: 12px;color: red; font-weight: bold; margin-left: 2px;">Nợ</span>
+            </span>
+            <span *ngIf="getChangeAmount() < 0" style="color: red;">Số tiền thừa:</span>
+            <span *ngIf="getChangeAmount() < 0" style="color: red;">
+              {{ formatPrice(getChangeAmount()) }}
+              <span *ngIf="getChangeAmount() < 0"
+                style="font-size: 12px;color: red; font-weight: bold; margin-left: 2px;">Nợ</span>
+            </span>
+          </div>
+          <div>
+            <label>
+              <input type="radio" name="paymentMode" [(ngModel)]="paymentMode" value="normal" /> Tính thường
+            </label>
+            <label>
+              <input type="radio" name="paymentMode" [(ngModel)]="paymentMode" value="debt" /> Tính vào công nợ
+            </label>
+
+          </div>
+          <div class="summary-row">
+            <label>
+              <input type="checkbox" [(ngModel)]="showVatDetails" /> Hiển thị VAT
+            </label>
+          </div>
+          <div class="summary-row" *ngIf="showVatDetails">
+
+            <span>VAT (%):</span>
+            <input class="customer-payment" type="number" min="0" step="0.1" [ngModel]="invoiceVatPercent"
+              (ngModelChange)="onInvoiceVatPercentChange($event)">
+          </div>
+          <div class="summary-row total" *ngIf="showVatDetails">
+            <span>Khách cần trả + VAT:</span>
+            <span class="total-amount">{{ formatPrice(getTotalAmountWithVAT()) }}</span>
+          </div>
+
+        </div>
+
+        <!-- Payment Options -->
+        <div class="payment-section">
+
+          <!-- Quick Amount Buttons -->
+          <span>Chọn nhanh số tiền khách trả:</span>
+          <div class="quick-amounts">
+            <button *ngFor="let amount of quickAmounts" class="amount-btn" (click)="selectQuickAmount(amount)">
+              {{ formatPrice(amount) }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Checkout Button -->
+        <div class="checkout-section">
+          <button class="checkout-btn" *ngIf="!isOrderMode && !isEditMode" (click)="checkout()">
+            THANH TOÁN (F9)
+          </button>
+          <button class="checkout-btn" *ngIf="!isOrderMode && isEditMode"
+            (click)="isEditModeInvoice ? saveEditedInvoice() : checkout()"
+            style="background-color: #ffd600; color: #333;">
+            {{ isEditModeInvoice ? 'LƯU HÓA ĐƠN ĐÃ SỬA (F9)' : 'LƯU CHỈNH SỬA (F9)' }}
+          </button>
+          <button class="checkout-btn" *ngIf="isOrderMode" (click)="order()">
+            ĐẶT HÀNG (F9)
+          </button>
+        </div>
+
+        <!-- Order Notes -->
+      </div>
+
+
+    </div>
+    <div class="notes-section">
+      <input type="text" placeholder="Ghi chú đơn hàng" class="notes-input" [(ngModel)]="invoiceNote">
+    </div>
+
+  </div>
+  <app-invoice-detail *ngIf="selectedInvoice" [invoice]="selectedInvoice" #invoiceDetailComp style="display:none">
+  </app-invoice-detail>

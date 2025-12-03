@@ -1,0 +1,210 @@
+<div class="report-dashboard" *ngIf="!hideFilters">
+    <!-- Small corner loader shown while background operations run -->
+    <div *ngIf="isLoading" class="corner-loading" aria-hidden="true">
+        <mat-spinner diameter="22"></mat-spinner>
+        <span class="sr-only">Đang tải dữ liệu...</span>
+    </div>
+    <section class="filters-card">
+        <div class="filters-left">
+            <div class="filter-field">
+                <label>Ngày</label>
+                <mat-form-field appearance="fill">
+                    <input matInput [matDatepicker]="datePicker" [(ngModel)]="selectedDate"
+                        (dateChange)="onDateChange($event)" placeholder="Chọn ngày" readonly>
+                    <mat-datepicker-toggle matSuffix [for]="datePicker"></mat-datepicker-toggle>
+                    <mat-datepicker #datePicker></mat-datepicker>
+                </mat-form-field>
+            </div>
+            <div class="filter-field">
+                <label>Tháng</label>
+                <mat-form-field appearance="fill">
+                    <mat-select [(ngModel)]="selectedMonth" (selectionChange)="onTopMonthOrYearChange()"
+                        placeholder="Tháng">
+                        <mat-option *ngFor="let m of months" [value]="m.value">{{ m.label }}</mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="filter-field">
+                <label>Năm</label>
+                <mat-form-field appearance="fill">
+                    <mat-select [(ngModel)]="selectedTopYear" (selectionChange)="onTopMonthOrYearChange()"
+                        placeholder="Năm">
+                        <mat-option *ngFor="let y of availableYears" [value]="y">{{ y }}</mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+        </div>
+        <div class="filters-actions">
+            <button mat-stroked-button color="primary" (click)="fetchInvoicesByDate(true)">
+                <mat-icon>refresh</mat-icon>
+                Làm mới
+            </button>
+            <button mat-stroked-button color="warn" (click)="clearFilters()">
+                <mat-icon>clear_all</mat-icon>
+                Xóa bộ lọc
+            </button>
+        </div>
+    </section>
+
+    <section class="kpi-grid">
+        <article class="kpi-card">
+            <div class="kpi-icon orders">
+                <mat-icon>inventory_2</mat-icon>
+            </div>
+            <div class="kpi-body">
+                <p class="label">Hóa đơn</p>
+                <h3>{{ totalBuyer | number:'1.0-0' }}</h3>
+                <span class="trend neutral">Theo bộ lọc</span>
+            </div>
+        </article>
+
+        <article class="kpi-card">
+            <div class="kpi-icon customers">
+                <mat-icon>group</mat-icon>
+            </div>
+            <div class="kpi-body">
+                <p class="label">Khách hàng</p>
+                <h3>{{ totalCustomers | number:'1.0-0' }}</h3>
+                <span class="trend positive">Ổn định</span>
+            </div>
+        </article>
+
+        <article class="kpi-card">
+            <div class="kpi-icon revenue">
+                <mat-icon>attach_money</mat-icon>
+            </div>
+            <div class="kpi-body">
+                <p class="label">Doanh thu</p>
+                <h3>{{ totalRevenue | number:'1.0-0' }} ₫</h3>
+                <span class="trend positive">Theo bộ lọc</span>
+            </div>
+        </article>
+
+        <article class="kpi-card">
+            <div class="kpi-icon profit">
+                <mat-icon>trending_up</mat-icon>
+            </div>
+            <div class="kpi-body">
+                <p class="label">Lợi nhuận</p>
+                <h3>{{ totalProfit | number:'1.0-0' }} ₫</h3>
+                <span class="trend" [ngClass]="{ 'positive': totalProfit >= 0, 'negative': totalProfit < 0 }">
+                    {{ totalProfit >= 0 ? 'Tăng trưởng' : 'Sụt giảm' }}
+                </span>
+            </div>
+        </article>
+
+        <article class="target-card">
+            <div class="target-header">
+                <div>
+                    <p>So sánh hiệu suất</p>
+                    <small>{{ comparisonLabel }}</small>
+                </div>
+                <button mat-icon-button (click)="refreshAllReports(true)">
+                    <mat-icon>refresh</mat-icon>
+                </button>
+            </div>
+            <div class="target-content">
+                <!-- Revenue comparison gauge -->
+                <div class="target-gauge" [ngStyle]="comparisonGaugeStyle">
+                    <div class="target-center">
+                        <strong>
+                            {{ comparisonPercentChange >= 0 ? '+' : '' }}{{ comparisonPercentChange | number:'1.0-0' }}%
+                        </strong>
+                        <span>{{ comparisonStatusText }}</span>
+                    </div>
+                </div>
+                <div class="target-text">
+                    <h4>Doanh thu<br>{{ totalRevenue | number:'1.0-0' }} ₫</h4>
+                    <p>Hiện tại</p>
+                    <p>Trước đó: {{ comparisonRevenue | number:'1.0-0' }} ₫</p>
+                </div>
+
+                <!-- Profit comparison gauge -->
+                <div class="target-gauge" [ngStyle]="profitComparisonGaugeStyle">
+                    <div class="target-center">
+                        <strong>
+                            {{ comparisonProfitPercentChange >= 0 ? '+' : '' }}{{ comparisonProfitPercentChange | number:'1.0-0' }}%
+                        </strong>
+                        <span>{{ profitComparisonStatusText }}</span>
+                    </div>
+                </div>
+                <div class="target-text profit-text">
+                    <h4>Lợi nhuận<br>{{ totalProfit | number:'1.0-0' }} ₫</h4>
+                    <p>Hiện tại</p>
+                    <p>Trước đó: {{ comparisonProfit | number:'1.0-0' }} ₫</p>
+                </div>
+            </div>
+            <div class="target-stats">
+                <div>
+                    <span>Hiện tại</span>
+                    <strong>{{ totalRevenue | number:'1.0-0' }} ₫</strong>
+                </div>
+                <div>
+                    <span>Trước đó</span>
+                    <strong>{{ comparisonRevenue | number:'1.0-0' }} ₫</strong>
+                </div>
+                <div>
+                    <span>Chênh lệch</span>
+                    <strong [ngClass]="{ 'positive': isComparisonPositive, 'negative': !isComparisonPositive }">
+                        {{ comparisonDelta | number:'1.0-0' }} ₫
+                    </strong>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <section class="charts-grid">
+        <article class="chart-card">
+            <div class="card-header">
+                <div>
+                    <h3>Top sản phẩm</h3>
+                    <p>Sản phẩm bán chạy nhất dựa trên lợi nhuận</p>
+                </div>
+                <div class="card-filters">
+                    <mat-form-field appearance="fill">
+                        <mat-label>Tháng</mat-label>
+                        <mat-select [(ngModel)]="selectedMonth" (selectionChange)="onTopMonthOrYearChange()">
+                            <mat-option *ngFor="let m of months" [value]="m.value">{{ m.label }}</mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="fill">
+                        <mat-label>Năm</mat-label>
+                        <mat-select [(ngModel)]="selectedTopYear" (selectionChange)="onTopMonthOrYearChange()">
+                            <mat-option *ngFor="let y of availableYears" [value]="y">{{ y }}</mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+            </div>
+
+            <div class="chart-body">
+                <div class="chart-loader" *ngIf="isLoading">
+                    <mat-spinner diameter="40"></mat-spinner>
+                    <p>Đang tải dữ liệu...</p>
+                </div>
+                <canvas baseChart [data]="barChartData" [options]="barChartOptions" [type]="barChartType"></canvas>
+            </div>
+        </article>
+        <article class="chart-card">
+            <div class="card-header">
+                <div>
+                    <h3>Thống kê 12 tháng</h3>
+                    <p>Thống kê 12 tháng gần nhất</p>
+                </div>
+                <mat-form-field appearance="fill">
+                    <mat-label>Năm</mat-label>
+                    <mat-select [(ngModel)]="selectedYear" (selectionChange)="onYearChange()">
+                        <mat-option *ngFor="let year of availableYears" [value]="year">{{ year }}</mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="chart-body">
+                <div class="chart-loader" *ngIf="isMonthlyChartLoading">
+                    <mat-spinner diameter="40"></mat-spinner>
+                    <p>Đang tải dữ liệu tháng...</p>
+                </div>
+                <canvas baseChart [data]="monthlyChartData" [options]="monthlyChartOptions"
+                    [type]="monthlyChartType"></canvas>
+            </div>
+        </article>
+    </section>
+</div>

@@ -1,0 +1,39 @@
+<div class="customer-search" style="position:relative;">
+  <input #searchCustomer
+         type="text"
+         placeholder="Tìm khách hàng (F4)"
+         class="customer-input"
+         (focusout)="closeDropdown()"
+         (input)="onCustomerSearchInput($event)"
+         (keydown)="onCustomerKeyDown($event)"
+         (keydown.backspace)="onCustomerDelete($any($event))"
+         [ngModel]="customerSearchTerm"
+         (ngModelChange)="onCustomerSearchTermChange($event)"
+         autocomplete="off" />
+
+  <mat-icon class="add-customer" (click)="openAddCustomerDialog()">add</mat-icon>
+
+  <div *ngIf="showCustomerDropdown && customerSuggestions.length > 0"
+       class="dropdown-customer customer-autocomplete">
+    <div class="customer-suggestion"
+         *ngFor="let customer of customerSuggestions; let i = index"
+         (mousedown)="selectCustomer(customer, $event)"
+         [class.active]="i === activeCustomerIndex">
+      {{ customer.Name }} - {{ customer.ContactNumber || '' }}
+      <br>
+      <span style="color: #9b9999;height: 50%;">Nợ: {{ customer.Debt | number:'1.0-0' }}</span>
+      &nbsp;
+      <span style="color: #9b9999;height: 50%;">Điểm thưởng: {{ customer.TotalPoint || 0 | number:'1.0-0' }}</span>
+    </div>
+  </div>
+</div>
+
+<span *ngIf="selectedCustomer && selectedCustomerDebtValue > 0"
+      style="margin-left: 15px;padding: 0 2px 0 2px;background-color:#faecec;color:#ED232F;border-radius: 5px;">
+  Nợ: {{ selectedCustomerDebtValue | number:'1.0-0' }}
+</span>
+
+<span *ngIf="selectedCustomer && selectedCustomerTotalPointValue > 0"
+      style="margin-left: 15px;padding: 0 2px 0 2px;background-color:#d9eedf;color:#12a04d;border-radius: 5px">
+  Điểm thưởng: {{ selectedCustomerTotalPointValue | number:'1.0-0' }}
+</span>

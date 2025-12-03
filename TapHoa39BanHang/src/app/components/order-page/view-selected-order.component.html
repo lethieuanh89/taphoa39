@@ -1,0 +1,106 @@
+<!-- Sync Status Bar (REST) -->
+<div class="websocket-status-bar">
+  <div class="status-indicators">
+    <span class="status-item rest-sync" title="Polling / Manual sync">
+      <mat-icon>cloud_sync</mat-icon>
+      REST sync
+    </span>
+    <span class="status-item">
+      <mat-icon>schedule</mat-icon>
+      Cập nhật: {{ getLastUpdateTime() }}
+    </span>
+  </div>
+  <div class="sync-actions">
+    <button mat-button (click)="refreshOrderData()" [disabled]="isDeleting" class="refresh-button">
+      <mat-icon>refresh</mat-icon>
+      Làm mới
+    </button>
+  </div>
+</div>
+
+<h6 class='title' mat-dialog-title>
+  Chi tiết đơn đặt hàng - {{data.order.id}}
+  <br>
+  <span class="customer-info">
+    Khách hàng : &nbsp;&nbsp; {{data.order.customer?.Name|| 'Khách lẻ'}} &nbsp;&nbsp;
+    {{data.order.customer?.ContactNumber}}
+  </span>
+  <br>
+  <span class="status-info" [class]="'status-' + (data.order.status || 'pending')">
+    Trạng thái: {{ getStatusText(data.order.status) }}
+  </span>
+</h6>
+
+<mat-dialog-content>
+  <div *ngIf="isDeleting" class="deleting-overlay">
+    <div class="spinner"></div>
+    <p>Đang xử lý...</p>
+  </div>
+
+  <table class="item-table" *ngIf="data.order.cartItems?.length">
+    <thead>
+      <tr>
+        <th style="text-align: left;">Tên sản phẩm</th>
+        <th style="text-align: center;">Số lượng</th>
+        <th style="text-align: right;">Giá bán</th>
+        <th style="text-align: right;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of data.order.cartItems">
+        <td>{{ item.product.FullName }}</td>
+        <td style="text-align: center;">{{ item.quantity }}</td>
+        <td style="text-align: end;">
+          <ng-container *ngIf="item.unitPriceSaleOff>0; else normalPrice">
+            <span style="text-decoration: line-through; color: #888; margin-right: 4px;">
+              {{ formatVnd(item.unitPrice+item.unitPriceSaleOff) }}
+            </span>
+            <span>{{ formatVnd(item.unitPrice) }}</span>
+          </ng-container>
+          <ng-template #normalPrice>
+            <span>{{ formatVnd(item.unitPrice) }}</span>
+          </ng-template>
+        </td>
+        <td style="text-align: right;">{{ formatVnd(item.totalPrice) }}</td>
+      </tr>
+      <tr style="border-top: 3px dotted rgb(0, 0, 0);">
+        <td style="font-weight: bold;">Tổng cộng:</td>
+        <td style="font-weight: bold; text-align: center;">{{ getTotalQuantity() | number:'1.0-0' }}</td>
+        <td colspan="2" style="font-weight: bold; text-align: right;">{{ formatVnd(getTotalPrice()) }}</td>
+      </tr>
+      <!-- <tr *ngIf="data.order.debt"> -->
+      <tr>
+        <td style="font-weight: bold;color:red">Nợ:</td>
+        <td colspan="3" style="font-weight: bold; color:red;text-align: end;">{{ formatVnd(data.order.debt) }}</td>
+      </tr>
+      <tr style="font-size: 11px;font-style: italic;">
+        <td style="font-weight: bold">Ghi chú:</td>
+        <td colspan="3" style="font-weight: bold; color:rgb(134, 133, 133);text-align: end;">{{ data.order.note }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p *ngIf="!data.order.cartItems?.length">Không có sản phẩm trong đơn đặt hàng.</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="center">
+  <button mat-button 
+          class="buttons" 
+          (click)="handleOrder()"
+          [disabled]="data.order.status === 'checked' || data.order.status === 'canceled'">
+    {{ data.order.status === 'checked' ? 'Đã xử lý' : 
+       data.order.status === 'canceled' ? 'Đã hủy' : 'Xử lý đơn hàng' }}
+  </button>
+  <button mat-button 
+          class="edit-button"
+          style="background: #ffd600; color: #333; font-weight: bold;"
+          (click)="editOrder()"
+          [disabled]="data.order.status === 'checked' || data.order.status === 'canceled'">
+    Sửa đơn hàng
+  </button>
+  <button mat-button 
+          class="delete-button" 
+          (click)="deleteOrder()"
+          [disabled]="data.order.status === 'checked'">
+    Xóa đơn hàng
+  </button>
+</mat-dialog-actions>

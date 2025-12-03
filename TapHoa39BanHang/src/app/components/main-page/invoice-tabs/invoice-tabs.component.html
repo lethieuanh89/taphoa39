@@ -1,0 +1,45 @@
+<div class="content-tab" #invoiceTabContainer (wheel)="onTabWheel($event)">
+  <!-- Invoice Tabs -->
+  <ng-container *ngIf="!isOrderMode">
+    <div class="invoice-tab"
+         *ngFor="let invoice of invoices; let idx = index"
+         #invoiceTab
+         [class.active]="idx === activeTabIndex"
+         (click)="setActiveTab(idx)"
+         [class.compact]="isTabCompact(getInvoiceTabName(invoice, idx))"
+         [attr.title]="getInvoiceTabName(invoice, idx)"
+         [attr.aria-label]="getInvoiceTabName(invoice, idx)">
+      <span class="invoice-tab-label"
+            [style.fontSize.px]="invoiceTabFontSize"
+            [class.numbers-only]="showInvoiceTabNumbersOnly">
+        {{ getTabDisplayLabel(getInvoiceTabName(invoice, idx)) }}
+      </span>
+      <i *ngIf="shouldShowCloseIcon(idx)"
+         class="fa-solid fa-xmark close-invoice-tab"
+         (click)="removeInvoiceTab(idx, $event)"></i>
+    </div>
+    <i class="fa-solid fa-circle-plus add-bill" (click)="addInvoiceTab()"></i>
+  </ng-container>
+
+  <!-- Order Tabs -->
+  <ng-container *ngIf="isOrderMode">
+    <div class="invoice-tab"
+         *ngFor="let order of orders; let idx = index"
+         #invoiceTab
+         [class.active]="idx === activeOrderTabIndex"
+         (click)="setActiveOrderTab(idx)"
+         [class.compact]="isTabCompact(getOrderTabName(order, idx))"
+         [attr.title]="getOrderTabName(order, idx)"
+         [attr.aria-label]="getOrderTabName(order, idx)">
+      <span class="invoice-tab-label"
+            [style.fontSize.px]="invoiceTabFontSize"
+            [class.numbers-only]="showInvoiceTabNumbersOnly">
+        {{ getTabDisplayLabel(getOrderTabName(order, idx)) }}
+      </span>
+      <i *ngIf="shouldShowCloseIcon(idx, true)"
+         class="fa-solid fa-xmark close-invoice-tab"
+         (click)="removeOrderTab(idx, $event)"></i>
+    </div>
+    <i class="fa-solid fa-circle-plus add-bill" (click)="addOrderTab()"></i>
+  </ng-container>
+</div>

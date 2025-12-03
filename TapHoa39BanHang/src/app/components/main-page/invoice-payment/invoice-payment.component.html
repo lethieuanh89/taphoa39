@@ -1,0 +1,133 @@
+<div class="main-content">
+  <app-customer-search></app-customer-search>
+
+  <div class="summary-section">
+    <div class="summary-row">
+      <span>Tổng tiền hàng:</span>
+      <span>{{ totalQuantity }}</span>
+      <span>{{ formatPrice(totalAmount) }}</span>
+    </div>
+
+    <div class="summary-row">
+      <span>Giảm giá:</span>
+      <input class="customer-payment"
+             type="number"
+             [(ngModel)]="discountAmount"
+             (keydown)="validateNumber($event)"
+             (ngModelChange)="onDiscountChange()">
+    </div>
+
+    <div class="summary-row total">
+      <span>Khách cần trả:</span>
+      <span class="total-amount">{{ formatPrice(totalAmount - (discountAmount || 0)) }}</span>
+    </div>
+
+    <div class="summary-row">
+      <span>Khách thanh toán:</span>
+      <input class="customer-payment"
+             type="text"
+             [value]="formatPrice(customerPaid || 0)"
+             (input)="onCustomerPaidChange($event)"
+             (click)="selectIfNotSelected($event)"
+             (keydown)="validateNumber($event)" />
+    </div>
+
+    <div class="summary-row change-amount">
+      <span *ngIf="changeAmount >= 0" style="color: rgb(25, 139, 15);">Số tiền thừa:</span>
+      <span *ngIf="changeAmount >= 0" style="color: rgb(25, 139, 15);">
+        {{ formatPrice(changeAmount) }}
+        <span *ngIf="changeAmount < 0"
+              style="font-size: 12px;color: red; font-weight: bold; margin-left: 2px;">Nợ</span>
+      </span>
+
+      <span *ngIf="changeAmount < 0" style="color: red;">Số tiền thừa:</span>
+      <span *ngIf="changeAmount < 0" style="color: red;">
+        {{ formatPrice(changeAmount) }}
+        <span style="font-size: 12px;color: red; font-weight: bold; margin-left: 2px;">Nợ</span>
+      </span>
+    </div>
+
+    <div>
+      <label>
+        <input type="radio"
+               name="paymentMode"
+               [(ngModel)]="paymentMode"
+               value="normal"
+               (change)="onPaymentModeChange()" /> Tính thường
+      </label>
+      <label>
+        <input type="radio"
+               name="paymentMode"
+               [(ngModel)]="paymentMode"
+               value="debt"
+               (change)="onPaymentModeChange()" /> Tính vào công nợ
+      </label>
+    </div>
+
+    <div class="summary-row">
+      <label>
+        <input type="checkbox"
+               [(ngModel)]="showVatDetails"
+               (change)="onShowVatDetailsChange()" /> Hiển thị VAT
+      </label>
+    </div>
+
+    <div class="summary-row" *ngIf="showVatDetails">
+      <span>VAT (%):</span>
+      <input class="customer-payment"
+             type="number"
+             min="0"
+             step="0.1"
+             [ngModel]="invoiceVatPercent"
+             (ngModelChange)="onInvoiceVatPercentChange($event)">
+    </div>
+
+    <div class="summary-row total" *ngIf="showVatDetails">
+      <span>Khách cần trả + VAT:</span>
+      <span class="total-amount">{{ formatPrice(totalAmountWithVAT) }}</span>
+    </div>
+  </div>
+
+  <!-- Payment Options -->
+  <div class="payment-section">
+    <span>Chọn nhanh số tiền khách trả:</span>
+    <div class="quick-amounts">
+      <button *ngFor="let amount of quickAmounts"
+              class="amount-btn"
+              (click)="selectQuickAmount(amount)">
+        {{ formatPrice(amount) }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Checkout Button -->
+  <div class="checkout-section">
+    <button class="checkout-btn"
+            *ngIf="!isOrderMode && !isEditMode"
+            (click)="checkout()">
+      THANH TOÁN (F9)
+    </button>
+
+    <button class="checkout-btn"
+            *ngIf="!isOrderMode && isEditMode"
+            (click)="isEditModeInvoice ? saveEditedInvoice() : checkout()"
+            style="background-color: #ffd600; color: #333;">
+      {{ isEditModeInvoice ? 'LƯU HÓA ĐƠN ĐÃ SỬA (F9)' : 'LƯU CHỈNH SỬA (F9)' }}
+    </button>
+
+    <button class="checkout-btn"
+            *ngIf="isOrderMode"
+            (click)="order()">
+      ĐẶT HÀNG (F9)
+    </button>
+  </div>
+</div>
+
+<!-- Order Notes -->
+<div class="notes-section">
+  <input type="text"
+         placeholder="Ghi chú đơn hàng"
+         class="notes-input"
+         [(ngModel)]="invoiceNote"
+         (ngModelChange)="onInvoiceNoteChange($event)">
+</div>

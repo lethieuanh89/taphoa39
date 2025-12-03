@@ -1,0 +1,54 @@
+<h2 mat-dialog-title>Chỉnh sửa tồn kho</h2>
+<div mat-dialog-content *ngIf="product; else loadingOrError" class="dialog-body">
+  <section class="product-card">
+    <div class="product-preview" *ngIf="product.Image; else initialsFallback">
+      <img [src]="product.Image" alt="{{ product.FullName || product.Name }}" loading="lazy" decoding="async" />
+    </div>
+    <ng-template #initialsFallback>
+      <div class="product-initials">
+        {{ (product.FullName || product.Name || '??') | slice:0:2 | uppercase }}
+      </div>
+    </ng-template>
+
+    <div class="product-info">
+      <h3>{{ product.FullName || product.Name }}</h3>
+      <p class="product-code">Mã: {{ product.Code || 'N/A' }}</p>
+      <div class="info-chips">
+        <span class="chip">
+          <small>Đơn vị</small>
+          <strong>{{ product.Unit || '---' }}</strong>
+        </span>
+        <span class="chip">
+          <small>Tồn hiện tại</small>
+          <strong>{{ product.OnHand | number:'1.0-2' }}</strong>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <mat-form-field appearance="fill" class="onhand-field smooth-input">
+      <mat-label>Tồn kho mới</mat-label>
+      <input matInput type="number" min="0" step="0.5" [(ngModel)]="newOnHand" />
+      <mat-hint>Giá trị mới sẽ áp dụng cho tất cả đơn vị quy đổi.</mat-hint>
+    </mat-form-field>
+  </section>
+
+  <div class="error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+</div>
+
+<ng-template #loadingOrError>
+  <div class="placeholder">
+    <span *ngIf="!errorMessage">Đang tải dữ liệu...</span>
+    <span *ngIf="errorMessage">{{ errorMessage }}</span>
+  </div>
+</ng-template>
+
+<div mat-dialog-actions align="end" class="dialog-actions">
+  <button mat-button class="ghost-action" (click)="cancel()" [disabled]="isSaving">Hủy</button>
+  <button mat-flat-button color="primary" class="primary-action" (click)="save()" [disabled]="isSaving || !product">
+    {{ isSaving ? 'Đang lưu...' : 'Lưu' }}
+  </button>
+</div>

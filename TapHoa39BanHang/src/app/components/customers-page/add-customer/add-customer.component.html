@@ -1,0 +1,106 @@
+<div class="dialog-container" >
+  <div class="header">
+    <h1 mat-dialog-title>Thêm khách hàng</h1>
+  </div>
+  <div mat-dialog-content [formGroup]="customerForm">
+    <div class="form-content">
+      <div class="left-column">
+        <div class="avatar-section">
+          <div class="avatar-placeholder"></div>
+          <button mat-stroked-button color="primary" class="choose-image-btn">
+            Chọn ảnh
+          </button>
+        </div>
+        <mat-form-field appearance="outline">
+          <mat-label>Mã khách hàng</mat-label>
+          <input matInput formControlName="code">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Tên khách hàng</mat-label>
+          <input matInput formControlName="name" required>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Điện thoại</mat-label>
+          <input matInput formControlName="phone">
+        </mat-form-field>
+
+        <div class="dob-gender-row">
+          <mat-form-field appearance="outline" class="dob-field">
+            <mat-label>Ngày sinh</mat-label>
+            <input matInput [matDatepicker]="picker" formControlName="dob">
+            <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+            <mat-datepicker #picker></mat-datepicker>
+          </mat-form-field>
+          <mat-radio-group formControlName="gender" class="gender-radio-group">
+            <mat-radio-button value="Nam">Nam</mat-radio-button>
+            <mat-radio-button value="Nữ">Nữ</mat-radio-button>
+          </mat-radio-group>
+        </div>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Địa chỉ</mat-label>
+          <input matInput formControlName="address">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Khu vực</mat-label>
+          <input matInput formControlName="area" placeholder="Chọn Tỉnh/TP - Quận/Huyện">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Phường xã</mat-label>
+          <input matInput formControlName="ward" placeholder="Chọn Phường/Xã">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+      </div>
+
+      <div class="right-column">
+        <label class="mat-label">Loại khách</label>
+        <mat-radio-group formControlName="type" class="type-radio-group">
+          <mat-radio-button value="personal">Cá nhân</mat-radio-button>
+          <mat-radio-button value="company">Công ty</mat-radio-button>
+        </mat-radio-group>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Mã số thuế</mat-label>
+          <input matInput formControlName="taxCode">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Số CMND/CCCD</mat-label>
+          <input matInput formControlName="idCard">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Email</mat-label>
+          <input matInput formControlName="email">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Facebook</mat-label>
+          <input matInput formControlName="facebook">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Nhóm</mat-label>
+          <input matInput formControlName="group">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Ghi chú</mat-label>
+          <textarea matInput formControlName="notes"></textarea>
+          <mat-icon matSuffix class="edit-icon">edit</mat-icon>
+        </mat-form-field>
+      </div>
+    </div>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-stroked-button (click)="onCancel()">Bỏ qua</button>
+    <button mat-flat-button color="primary" (click)="onSave()" [disabled]="isSaving">
+      <mat-icon>save</mat-icon> Lưu
+    </button>
+  </div>
+</div>

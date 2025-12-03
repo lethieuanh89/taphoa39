@@ -1,0 +1,50 @@
+<div class="dialog-container">
+  <h2>Danh sách sản phẩm hết hàng</h2>
+  <div class="toolbar">
+    <div class="search-box">
+      <input class="input-search" [(ngModel)]="searchTerm" (input)="filter()" placeholder="Tìm theo mã hoặc tên..." />
+    </div>
+    <span class="results-chip">Tổng: {{ totalItems | number:'1.0-0' }} sản phẩm</span>
+    <button mat-button class="reload-button" (click)="reload()" [disabled]="isLoading">
+      <span class="reload-icon">&#x21bb;</span>
+      Reload
+    </button>
+  </div>
+  <div class="table-wrapper">
+    <div class="loading" *ngIf="isLoading">Đang tải...</div>
+    <div class="empty-state" *ngIf="!isLoading && filteredItems.length === 0">
+      <p>Không có sản phẩm nào phù hợp với từ khóa.</p>
+      <small>Thử đổi từ khóa khác hoặc reload dữ liệu.</small>
+    </div>
+    <table *ngIf="!isLoading && filteredItems.length > 0">
+      <thead>
+        <tr>
+          <th>Mã</th>
+          <th>Tên</th>
+          <th>Giá vốn</th>
+          <th>Giá bán</th>
+          <th>Tồn kho</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of filteredItems; trackBy: trackByProductId" class="clickable-row" (click)="openUpdateStockDialog(item)">
+          <td class="code-cell">{{ item.Code }}</td>
+          <td>
+            <div class="product-name">{{ item.FullName }}</div>
+            <div class="product-subtitle" *ngIf="item.Name && item.Name !== item.FullName">{{ item.Name }}</div>
+          </td>
+          <td>{{ item.Cost | number:'1.0-0' }}</td>
+          <td>{{ item.BasePrice | number:'1.0-0' }}</td>
+          <td>
+            <span class="stock-badge" [ngClass]="getStockBadgeClass(item)">{{ item.OnHand | number:'1.0-0' }}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <button (click)="prevPage()" [disabled]="page === 1">&lt;</button>
+    <span>Trang {{page}} / {{totalPages}}</span>
+    <button (click)="nextPage()" [disabled]="page === totalPages">&gt;</button>
+  </div>
+</div>
