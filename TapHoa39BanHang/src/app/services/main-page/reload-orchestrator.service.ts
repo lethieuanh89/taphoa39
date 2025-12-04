@@ -90,7 +90,8 @@ export class ReloadOrchestratorService {
     // Bước 5: LUÔN sync từ Firebase về IndexedDB (không phụ thuộc vào seededIndexedDB)
     // Đây là thay đổi quan trọng - đảm bảo products được cập nhật từ Firebase
     // Sử dụng firebaseProducts đã fetch ở bước 4 để tránh gọi API lần nữa
-    console.log('🔄 Sync products từ Firebase về IndexedDB.. .');
+    // Không cần clear cache vì chúng ta đang sử dụng products đã fetch sẵn
+    console.log('🔄 Sync products từ Firebase về IndexedDB...');
     await this.syncFromFirebaseToIndexedDB(firebaseProducts);
 
     // Bước 6: Verify và reseed nếu cần
