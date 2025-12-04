@@ -620,37 +620,43 @@ export class InvoicesPageComponent implements OnInit, OnDestroy {
   }
 
   // Manual sync method with proper locking
+    // Manual sync method with proper locking
   async manualSync(): Promise<void> {
     if (this.isSyncing) {
-      this.logger.warn('Sync already in progress, please wait...');
+      this.logger.warn('Sync already in progress, please wait.. .');
       this.notification.warning('Đang đồng bộ, vui lòng đợi...');
       return;
     }
 
     if (this.isLoading) {
-      this.logger.warn('Component is loading, please wait...');
+      this.logger. warn('Component is loading, please wait...');
       this.notification.warning('Đang tải dữ liệu, vui lòng đợi...');
       return;
     }
 
-    this.logger.info('Manual sync requested...');
-    // Manual sync should only sync today's invoices (get newest for today)
-    const now = new Date();
-    this.selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    this.logger.info('Manual sync requested.. .');
+    
+    // Nếu chưa chọn ngày, mới fallback về ngày hôm nay
+    // Nếu đã chọn ngày, giữ nguyên ngày đã chọn để sync
+    if (!this.selectedDate) {
+      const now = new Date();
+      this.selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    }
+    
     this.isLoading = true;
     try {
       await this.performSync();
       // Set lastManualSyncAt after a successful sync
-      this.lastManualSyncAt = new Date();
+      this. lastManualSyncAt = new Date();
       // Clear inline notification banner on successful manual sync
-      this.inlineNotifyMessage = null;
+      this. inlineNotifyMessage = null;
       try {
-        this.lastClearedNotifyAt = Date.now();
+        this. lastClearedNotifyAt = Date.now();
         localStorage.setItem('invoices_inline_notify_cleared_at', String(this.lastClearedNotifyAt));
       } catch {}
-      this.logger.info('Manual sync completed successfully (today) — inline notification cleared');
+      this.logger.info('Manual sync completed successfully — inline notification cleared');
     } catch (error) {
-      this.logger.error('Manual sync failed', error);
+      this. logger.error('Manual sync failed', error);
       this.notification.error('Đồng bộ thất bại');
     } finally {
       this.isLoading = false;

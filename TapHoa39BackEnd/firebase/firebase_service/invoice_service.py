@@ -1,5 +1,6 @@
 from datetime import datetime
 import time
+import traceback
 from google.api_core.exceptions import DeadlineExceeded
 
 from dotenv import load_dotenv
@@ -267,62 +268,7 @@ class FirestoreInvoiceService:
 
         doc_ref.set(payload, merge=True)
 
-    def adjust_product_inventory(self, invoice: dict, direction: int, product_service) -> dict:
-        """
-        Adjust product OnHand based on invoice cart items.
-        direction: 1 for decrease (add invoice), -1 for restore (delete/reduce invoice)
-        Returns dict with adjustment details
-        """
-        if invoice is None or not isinstance(invoice, dict):
-            return {"updated": False, "reason": "invalid_invoice", "adjustments": []}
-
-        if direction not in (1, -1):
-            return {"updated": False, "reason": "invalid_direction", "adjustments": []}
-
-        cart_items = invoice.get('cartItems', []) or []
-        if not cart_items:
-            return {"updated": False, "reason": "no_cart_items", "adjustments": []}
-
-        adjustments = []
-        for item in cart_items:
-            product_data = item.get('product') or {}
-            product_id = product_data.get('Id') or product_data.get('id') or item.get('productId')
-            quantity = self.safe_int(item.get('quantity', 0))
-
-            if quantity <= 0 or product_id is None:
-                continue
-
-            product_id_str = str(product_id)
-            try:
-                product_doc = product_service.read_product(product_id_str)
-                if not product_doc:
-                    continue
-
-                current_onhand = self.safe_float(product_doc.get('OnHand'))
-                # direction=1: decrease (invoice added), so new = current - quantity
-                # direction=-1: restore (invoice deleted), so new = current + quantity
-                new_onhand = max(0, current_onhand - (direction * quantity))
-                
-                product_service.update_product(product_id_str, {"OnHand": new_onhand})
-                adjustments.append({
-                    "productId": product_id_str,
-                    "old_onhand": current_onhand,
-                    "new_onhand": new_onhand,
-                    "quantity_adjusted": direction * quantity,
-                })
-            except Exception as e:
-                import traceback
-                print(f"Error adjusting product {product_id_str}: {e}")
-                print(traceback.format_exc())
-                adjustments.append({
-                    "productId": product_id_str,
-                    "error": str(e),
-                })
-
-        return {
-            "updated": len(adjustments) > 0,
-            "adjustments": adjustments,
-        }
+    
 
     def safe_float(self, val):
         try:

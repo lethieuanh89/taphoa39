@@ -49,11 +49,6 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
 
             invalidate_invoice_cache(customer_service, normalized_invoice)
 
-            # ✅ NEW: Adjust product inventory (decrease OnHand when invoice is added)
-            inventory_result = invoice_service.adjust_product_inventory(normalized_invoice, direction=1, product_service=product_service)
-            if inventory_result.get("adjustments"):
-                broadcast_products_onhand_updated(socketio, inventory_result.get("adjustments", []))
-
             # ✅ NEW: Update summaries (DailySummary, MonthlySummary, YearlySummary)
             summary_result = invoice_service.adjust_invoice_summaries(normalized_invoice, direction=1)
 
@@ -67,8 +62,6 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
             notify_invoice_created(socketio, normalized_invoice)
             
             response = dict(result)
-            if inventory_result.get("updated"):
-                response["inventory_adjusted"] = inventory_result
             if summary_result.get("updated"):
                 response["summary_adjusted"] = summary_result
             
@@ -96,28 +89,6 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
                 invalidate_invoice_cache(customer_service, existing_invoice)
             if updated_invoice:
                 invalidate_invoice_cache(customer_service, updated_invoice)
-
-            # ✅ NEW: Handle product inventory changes
-            inventory_adjustments = []
-            
-            # Restore old inventory if existing_invoice has cartItems
-            if existing_invoice and existing_invoice.get('cartItems'):
-                old_inventory_result = invoice_service.adjust_product_inventory(
-                    existing_invoice, direction=-1, product_service=product_service
-                )
-                if old_inventory_result.get("adjustments"):
-                    inventory_adjustments.extend(old_inventory_result.get("adjustments", []))
-            
-            # Deduct new inventory if updated_invoice has cartItems
-            if updated_invoice and updated_invoice.get('cartItems'):
-                new_inventory_result = invoice_service.adjust_product_inventory(
-                    updated_invoice, direction=1, product_service=product_service
-                )
-                if new_inventory_result.get("adjustments"):
-                    inventory_adjustments.extend(new_inventory_result.get("adjustments", []))
-
-            if inventory_adjustments:
-                broadcast_products_onhand_updated(socketio, inventory_adjustments)
 
             # ✅ NEW: Handle summary changes
             summary_adjustments = []
@@ -161,8 +132,6 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
                 notify_invoice_updated(socketio, updated_invoice)
 
             response = dict(result)
-            if inventory_adjustments:
-                response["inventory_adjusted"] = inventory_adjustments
             if summary_adjustments:
                 response["summary_adjusted"] = summary_adjustments
 
@@ -182,14 +151,35 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
             existing_invoice = invoice_service.read_invoice(invoice_id)
             if not existing_invoice:
                 return jsonify({"status": "error", "message": "Invoice not found"}), 404
-
-            # ✅ Use new adjust_product_inventory for consistency
-            inventory_result = invoice_service.adjust_product_inventory(
-                existing_invoice, direction=-1, product_service=product_service
-            )
-            restocked_updates = inventory_result.get("adjustments", [])
-            restock_errors = [adj for adj in restocked_updates if adj.get("error")]
-
+            restocked_updates = []
+            restock_errors = []
+            cart_items = existing_invoice.get('cartItems', []) or []   
+            	
+            for item in cart_items:
+                product_data = item.get('product') or {}
+                product_id = product_data.get('Id') or product_data.get('id') or item.get('productId')
+                quantity = safe_int(item.get('quantity', 0))
+                if quantity <= 0:
+                    continue
+                pid_str = str(product_id) if product_id is not None else None
+                if not is_valid_pid(pid_str):
+                    continue
+                product_doc = product_service.read_product(pid_str)
+                if not product_doc:
+                    continue
+                current_onhand = to_number(product_doc.get('OnHand'))
+                if current_onhand is None:
+                    continue
+                new_onhand = int(current_onhand) + quantity
+                try:
+                    product_service.update_product(pid_str, {"OnHand": new_onhand})
+                    restocked_updates.append({"Id": pid_str, "OnHand": new_onhand})
+                except Exception as exc:
+                    import traceback
+                    print(f"Error restocking product {pid_str}: {exc}")
+                    print(traceback.format_exc())
+                    restock_errors.append({"id": pid_str, "error": str(exc)})
+            
             # ✅ Adjust summaries (reverse the invoice)
             summary_adjustment = invoice_service.adjust_invoice_summaries(existing_invoice, direction=-1)
 
@@ -206,11 +196,8 @@ def create_firebase_invoices_bp(invoice_service, product_service, customer_servi
 
             notify_invoice_deleted(socketio, invoice_id)
 
-            if restocked_updates:
                 # Filter out error entries for the broadcast
-                clean_updates = [adj for adj in restocked_updates if not adj.get("error")]
-                if clean_updates:
-                    broadcast_products_onhand_updated(socketio, clean_updates)
+            broadcast_products_onhand_updated(socketio, restocked_updates)
 
             response = {
                 "message": delete_result.get("message", "invoice deleted"),

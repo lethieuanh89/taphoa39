@@ -865,9 +865,12 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
           invoice.onHandSynced = true;
           await this.invoiceService.markOfflineInvoiceOnHandSynced(invoice.id, true);
 
-          const ids: number[] = (res?.updated_products ?? [])
-            .map((p: any) => Number(p.Id))
-            .filter((x: number) => Number.isFinite(x));
+          if (res?.updated_products?.length > 0) {
+            const ids = res.updated_products.map((p: any) => Number(p.Id)).filter((x: unknown) => Number.isFinite(x));
+            if (ids.length > 0) {
+              await this.productService.fetchProductsByIds(ids);
+            }
+          }
 
           this.manuallyEditedOnHandProductIds.clear();
         } catch (err) {
