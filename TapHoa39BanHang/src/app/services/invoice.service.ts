@@ -851,7 +851,7 @@ export class InvoiceService implements OnInit {
           try {
             await firstValueFrom(this.addInvoiceToFirestore(invoice));
             console.log(`✅ Pushed invoice ${invoice.id} to Firestore`);
-            await this.ensureInvoiceOnHandSynced(invoice, undefined, { localOnly: true });
+            await this.ensureInvoiceOnHandSynced(invoice);
           } catch (error) {
             console.error(`❌ Failed to push invoice ${invoice.id} to Firestore:`, error);
           }
@@ -1311,14 +1311,13 @@ export class InvoiceService implements OnInit {
 
   async ensureInvoiceOnHandSynced(
     invoice: InvoiceTab,
-    groupedProductsOverride?: Record<number, any[]>,
-    options?: { localOnly?: boolean }
+    groupedProductsOverride?: Record<number, any[]>
   ): Promise<boolean> {
     if (!invoice || !Array.isArray(invoice.cartItems) || invoice.cartItems.length === 0) {
       return false;
     }
 
-    if (invoice.onHandSynced && !options?.localOnly) {
+    if (invoice.onHandSynced) {
       return false;
     }
 
@@ -1334,9 +1333,7 @@ export class InvoiceService implements OnInit {
         invoice,
         groupedProducts as any,
         new Set<number>(),
-        'decrease',
-        undefined,
-        { skipRemote: options?.localOnly === true }
+        'decrease'
       );
       invoice.onHandSynced = true;
       await this.markOfflineInvoiceOnHandSynced(invoice.id, true);

@@ -596,12 +596,54 @@ class FirestoreProductService:
         item_copy.pop("SyncChecksum", None)
         return hashlib.md5(json.dumps(item_copy, sort_keys=True, default=default_serializer).encode()).hexdigest()
 
-def is_newer(api_mod, fs_mod):
-    try:
-        if not api_mod:
+    def is_newer(api_mod, fs_mod):
+        try:
+            if not api_mod:
+                return False
+            if not fs_mod:
+                return True
+            return parse_date(api_mod) > parse_date(fs_mod)
+        except Exception:
             return False
-        if not fs_mod:
-            return True
-        return parse_date(api_mod) > parse_date(fs_mod)
-    except Exception:
-        return False
+    def read_all_products_fresh(self, include_inactive: bool = False, include_deleted: bool = False):
+        """
+        ✅ NEW: Đọc TẤT CẢ products trực tiếp từ Firestore, KHÔNG dùng cache. 
+        """
+        print(f"🔄 read_all_products_fresh called (include_inactive={include_inactive}, include_deleted={include_deleted})")
+
+        docs = self.products_ref.stream()
+        result = []
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            # Determine item flags
+            is_active = self._coerce_bool(data.get("isActive"), True)
+            is_deleted = self._coerce_bool(data.get("isDeleted"), False)
+
+            # Apply filters based on function args
+            if (not include_inactive) and (not is_active):
+                continue
+            if (not include_deleted) and is_deleted:
+                continue
+
+            result.append(dict(data))
+
+        print(f"✅ Fetched {len(result)} products from Firestore (fresh)")
+        return result
+
+
+    def invalidate_all_product_caches(self):
+        """Invalidate tất cả các cache keys liên quan đến products"""
+        cache_keys_to_invalidate = [
+            "all_products",
+            "all_products:inactive=False:deleted=False",
+            "all_products:inactive=True:deleted=False",
+            "all_products:inactive=False:deleted=True",
+            "all_products:inactive=True:deleted=True",
+        ]
+
+        for key in cache_keys_to_invalidate:
+            self.cache.invalidate(key)
+
+        print(f"🗑️ Invalidated {len(cache_keys_to_invalidate)} product cache keys")

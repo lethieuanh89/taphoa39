@@ -192,7 +192,7 @@ export class ProductService {
   ) {
     // No websocket initialization — backend no longer accepts incoming websocket updates.
   }
-  
+
   async initDB(): Promise<void> {
     try {
       console.log('🔄 Khởi tạo ProductService IndexedDB...');
@@ -212,7 +212,7 @@ export class ProductService {
 
         if (!db.objectStoreNames.contains('outofstock')) {
           const outofstore = db.createObjectStore('outofstock', { keyPath: 'Id' });
-           outofstore.createIndex('Code', 'Code', { unique: false });
+          outofstore.createIndex('Code', 'Code', { unique: false });
           outofstore.createIndex('FullName', 'FullName', { unique: false });
           console.log(`✅ Đã tạo object store 'outofstock' thành công`);
         }
@@ -269,7 +269,7 @@ export class ProductService {
     }
 
     console.warn('⚠️ Kết nối IndexedDB đã đóng, đang mở lại trước khi thao tác...');
-    await this.indexedDBService.closeDB(this.dbName).catch(() => {/* ignore */});
+    await this.indexedDBService.closeDB(this.dbName).catch(() => {/* ignore */ });
     await this.initDB();
   }
 
@@ -541,9 +541,9 @@ export class ProductService {
 
       // Tạo Set các product IDs từ API để tìm kiếm nhanh
       const apiProductIds = new Set(apiProducts.map(p => p.Id));
-      
+
       // Tìm products trong IndexedDB mà không có trong API
-      const orphanedProducts = existingProducts.filter(existingProduct => 
+      const orphanedProducts = existingProducts.filter(existingProduct =>
         !apiProductIds.has(existingProduct.Id)
       );
 
@@ -645,7 +645,7 @@ export class ProductService {
   // private async syncDeletedProductsToFirestore(deletedProductIds: number[]): Promise<void> {
   //   try {
   //     console.log(`🔄 Đồng bộ việc xóa ${deletedProductIds.length} products lên Firestore...`);
-      
+
   //     // Gọi API để xóa products khỏi Firestore
   //     const response = await firstValueFrom(
   //       this.http.post(`${environment.domainUrl}${this.firebaseService.delete_products_batch_from_firebase}`, {
@@ -700,7 +700,7 @@ export class ProductService {
 
       // Đếm số lượng đã xóa
       const apiProductIds = new Set(validApiProducts.map((p: Product) => p.Id));
-      const orphanedProducts = existingProducts.filter(existingProduct => 
+      const orphanedProducts = existingProducts.filter(existingProduct =>
         !apiProductIds.has(existingProduct.Id)
       );
 
@@ -745,7 +745,7 @@ export class ProductService {
 
       // Tìm orphaned products
       const apiProductIds = new Set(validApiProducts.map((p: Product) => p.Id));
-      const orphanedProducts = existingProducts.filter(existingProduct => 
+      const orphanedProducts = existingProducts.filter(existingProduct =>
         !apiProductIds.has(existingProduct.Id)
       );
 
@@ -800,15 +800,17 @@ export class ProductService {
     }
   }
 
-  async syncProductsFromFirebaseToIndexedDB(): Promise<void> {
+  async syncProductsFromFirebaseToIndexedDB(firebaseProducts?: Product[]): Promise<void> {
     try {
       // Đảm bảo IndexedDB đã được khởi tạo
       await this.ensureDBInitialized();
 
       console.log('🔄 Bắt đầu đồng bộ products từ Firebase về IndexedDB...');
 
-      // Lấy tất cả products từ Firebase (sử dụng cache nếu có)
-      const allProducts = await this.getProductsFromFirebaseWithCache();
+      // Lấy tất cả products từ Firebase (sử dụng cache nếu có, hoặc sử dụng products đã truyền vào)
+      const allProducts = firebaseProducts && firebaseProducts.length > 0
+        ? firebaseProducts
+        : await this.getProductsFromFirebaseWithCache();
       console.log('🔎 [DEBUG] syncProductsFromFirebaseToIndexedDB: nhận được', (allProducts && allProducts.length) || 0, 'products từ Firebase');
 
       if (!allProducts || allProducts.length === 0) {
@@ -949,56 +951,56 @@ export class ProductService {
         console.trace('Stack trace for sync API call');
 
         const res = await firstValueFrom(
-        this.http.post<any>(url, { skip_products: !includeProducts }).pipe(
-          catchError(err => {
-            console.error('❌ Lỗi khi gọi POST sync endpoint:', err);
-            const errorMessage = err?.error?.error || err?.message || 'Lỗi kết nối đến server';
-            throw new Error(errorMessage);
-          })
-        )
-      );
+          this.http.post<any>(url, { skip_products: !includeProducts }).pipe(
+            catchError(err => {
+              console.error('❌ Lỗi khi gọi POST sync endpoint:', err);
+              const errorMessage = err?.error?.error || err?.message || 'Lỗi kết nối đến server';
+              throw new Error(errorMessage);
+            })
+          )
+        );
 
-      console.log('📦 Backend response:', res);
+        console.log('📦 Backend response:', res);
 
-      // Check if sync succeeded
-      // Support both old and new response formats
-      const syncResult = res?.sync || res || {};
-      console.log('📊 Sync result:', syncResult);
-      console.log('🏷️ Backend version:', syncResult.version || 'unknown (old code)');
+        // Check if sync succeeded
+        // Support both old and new response formats
+        const syncResult = res?.sync || res || {};
+        console.log('📊 Sync result:', syncResult);
+        console.log('🏷️ Backend version:', syncResult.version || 'unknown (old code)');
 
-      // Check for success (new format: success field, old format: check message)
-      const isSuccess = syncResult.success === true ||
-                       (syncResult.message && syncResult.message.includes('đồng bộ') && !syncResult.error);
+        // Check for success (new format: success field, old format: check message)
+        const isSuccess = syncResult.success === true ||
+          (syncResult.message && syncResult.message.includes('đồng bộ') && !syncResult.error);
 
-      if (!isSuccess) {
-        const errorMsg = syncResult.error || syncResult.message || 'Đồng bộ thất bại';
-        console.error('❌ Sync failed:', errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      console.log('✅ Sync succeeded:', syncResult.stats || 'No stats available (old format)');
-
-      // If products were not included in response, fetch them separately
-      let products: Product[] = [];
-      if (includeProducts) {
-        products = this.normalizeProductApiPayload(res);
-
-        if (products && products.length > 0) {
-          console.log(`📦 Lưu ${products.length} products vào IndexedDB...`);
-
-          try {
-            await this.indexedDBService.clear(this.dbName, this.dbVersion, this.storeName);
-          } catch (clearErr) {
-            console.warn('⚠️ Không thể clear store:', clearErr);
-          }
-
-          const sanitized = products.map(p => this.sanitizeProductForStorage({ ...p }));
-          await this.indexedDBService.putMany(this.dbName, this.dbVersion, this.storeName, sanitized);
-          this.invalidateIndexedDbCache();
+        if (!isSuccess) {
+          const errorMsg = syncResult.error || syncResult.message || 'Đồng bộ thất bại';
+          console.error('❌ Sync failed:', errorMsg);
+          throw new Error(errorMsg);
         }
-      } else {
-        console.log('ℹ️ Products not included in sync response (skip_products=true). Fetch separately if needed.');
-      }
+
+        console.log('✅ Sync succeeded:', syncResult.stats || 'No stats available (old format)');
+
+        // If products were not included in response, fetch them separately
+        let products: Product[] = [];
+        if (includeProducts) {
+          products = this.normalizeProductApiPayload(res);
+
+          if (products && products.length > 0) {
+            console.log(`📦 Lưu ${products.length} products vào IndexedDB...`);
+
+            try {
+              await this.indexedDBService.clear(this.dbName, this.dbVersion, this.storeName);
+            } catch (clearErr) {
+              console.warn('⚠️ Không thể clear store:', clearErr);
+            }
+
+            const sanitized = products.map(p => this.sanitizeProductForStorage({ ...p }));
+            await this.indexedDBService.putMany(this.dbName, this.dbVersion, this.storeName, sanitized);
+            this.invalidateIndexedDbCache();
+          }
+        } else {
+          console.log('ℹ️ Products not included in sync response (skip_products=true). Fetch separately if needed.');
+        }
 
         return {
           success: true,
@@ -1346,11 +1348,10 @@ export class ProductService {
 
   async updateProductsOnHandFromInvoiceToFireBase(
     invoice: InvoiceTab,
-    groupedProducts: { [x: string]: unknown; [x: number]: unknown[]; },
+    groupedProducts: { [x: string]: unknown;[x: number]: unknown[]; },
     _manuallyEditedIds: Set<number>,
     operation: 'decrease' | 'increase' = 'decrease',
-    currentOnHandOverride?: Map<number, number>,
-    options?: { skipRemote?: boolean }
+    currentOnHandOverride?: Map<number, number>
   ): Promise<any> {
     // ✅ Lấy OnHand hiện tại từ IndexedDB để đảm bảo đồng bộ với confirmEditOnHand
 
@@ -1393,8 +1394,8 @@ export class ProductService {
 
     for (const cartItem of invoice.cartItems) {
       const masterUnitId = cartItem.product.MasterUnitId || cartItem.product.Id;
-  const group = groupedProducts[masterUnitId] as unknown as Product[];
-  if (!group) continue;
+      const group = groupedProducts[masterUnitId] as unknown as Product[];
+      if (!group) continue;
 
       // Số lượng quy đổi về đơn vị nhỏ nhất (master)
       const masterQty = Number(cartItem.quantity ?? 0) * (Number(cartItem.product?.ConversionValue) || 1);
@@ -1408,80 +1409,44 @@ export class ProductService {
     }
 
     // ✅ Chuẩn bị payload với OnHand hiện tại và số lượng trừ
-      const updatePayload = Object.entries(updates).map(([productId, delta]) => {
-        const numericId = Number(productId);
-        const current = Number(currentOnHandMap[numericId] ?? 0);
-        const numericDelta = Number(delta) || 0;
-        const newOnHand = current + numericDelta;
-        const minus = numericDelta < 0 ? Math.abs(numericDelta) : 0;
-        const plus = numericDelta > 0 ? numericDelta : 0;
-        return {
-          productId: numericId,
-          currentOnHand: current,
-          delta: numericDelta,
-          minus,
-          plus,
-          newOnHand
-        };
-      });
+    const updatePayload = Object.entries(updates).map(([productId, delta]) => {
+      const numericId = Number(productId);
+      const current = Number(currentOnHandMap[numericId] ?? 0);
+      const numericDelta = Number(delta) || 0;
+      const newOnHand = current + numericDelta;
+      const minus = numericDelta < 0 ? Math.abs(numericDelta) : 0;
+      const plus = numericDelta > 0 ? numericDelta : 0;
+      return {
+        productId: numericId,
+        currentOnHand: current,
+        delta: numericDelta,
+        minus,
+        plus,
+        newOnHand
+      };
+    });
 
     console.log('🔄 Cập nhật OnHand cho Firestore:', updatePayload);
-
-    const payloadAsUpdatedProducts = updatePayload.map(item => ({
-      Id: item.productId,
-      new_OnHand: item.newOnHand
-    }));
-
-    if (options?.skipRemote) {
-      await this.applyUpdatedProductsToIndexedDB(payloadAsUpdatedProducts);
-      return {
-        skippedRemote: true,
-        updated_products: payloadAsUpdatedProducts
-      };
-    }
 
     try {
       const response = await this.http.put(`${environment.domainUrl}/api/firebase/products/update_onhand_batch`, updatePayload).toPromise() as any;
 
-      const updatedProducts = Array.isArray(response?.updated_products) && response.updated_products.length > 0
-        ? response.updated_products
-        : payloadAsUpdatedProducts;
-
-      await this.applyUpdatedProductsToIndexedDB(updatedProducts);
+      // ✅ NEW: Cập nhật IndexedDB ngay sau khi nhận response từ backend
+      if (response && response.updated_products && Array.isArray(response.updated_products)) {
+        console.log('✅ Cập nhật IndexedDB từ response:', response.updated_products);
+        for (const updatedItem of response.updated_products) {
+          try {
+            await this.updateProductOnHandLocal(updatedItem.Id, updatedItem.new_OnHand);
+          } catch (error) {
+            console.error(`❌ Lỗi cập nhật IndexedDB cho product ${updatedItem.Id}:`, error);
+          }
+        }
+      }
 
       return response;
     } catch (error) {
       console.error('❌ Lỗi khi gọi API update_onhand_batch:', error);
       throw error;
-    }
-  }
-
-  private async applyUpdatedProductsToIndexedDB(
-    updatedProducts: Array<{ Id?: number; productId?: number; new_OnHand?: number; newOnHand?: number; OnHand?: number; onHand?: number }>
-  ): Promise<void> {
-    if (!Array.isArray(updatedProducts) || updatedProducts.length === 0) {
-      return;
-    }
-
-    for (const updatedItem of updatedProducts) {
-      const productId = Number(
-        updatedItem?.Id ??
-        updatedItem?.productId ??
-        (updatedItem as any)?.ProductId
-      );
-
-      const nextOnHandRaw = updatedItem?.new_OnHand ?? updatedItem?.newOnHand ?? updatedItem?.OnHand ?? updatedItem?.onHand;
-      const nextOnHand = Number(nextOnHandRaw);
-
-      if (!Number.isFinite(productId) || !Number.isFinite(nextOnHand)) {
-        continue;
-      }
-
-      try {
-        await this.updateProductOnHandLocal(productId, nextOnHand);
-      } catch (error) {
-        console.error(`❌ Lỗi cập nhật IndexedDB cho product ${productId}:`, error);
-      }
     }
   }
 
@@ -1492,6 +1457,7 @@ export class ProductService {
       // normalize to the Product model field
       (product as any).OnHand = onHand;
       await this.indexedDBService.put<Product>(this.dbName, this.dbVersion, this.storeName, product);
+      console.log(`✅ [IndexedDB] Updated product ${productId} OnHand: ${onHand}`);
       if (this.indexedDbProductsCache) {
         const cached = this.indexedDbProductsCache.find(p => p.Id === productId);
         if (cached) {
@@ -1499,6 +1465,8 @@ export class ProductService {
         }
       }
       await this.syncOutOfStockEntry(product as Product);
+    } else {
+      console.warn(`⚠️ [IndexedDB] Product ${productId} not found in IndexedDB, cannot update OnHand to ${onHand}`);
     }
   }
 
@@ -1730,7 +1698,7 @@ export class ProductService {
   }
 
   // Method private để thực hiện việc fetch products từ Firebase
-   private async fetchProductsFromFirebase(): Promise<Product[]> {
+  private async fetchProductsFromFirebase(): Promise<Product[]> {
     try {
       console.log('🔎 [DEBUG] fetchProductsFromFirebase: gọi getAllProductsFromFirebase API');
       const products = await firstValueFrom(this.getAllProductsFromFirebase());
@@ -2274,7 +2242,7 @@ export class ProductService {
     const t1 = performance.now();
     console.log(`⏱️ Gửi lên Firestore (API /api/firebase/update/products) mất ${t1 - t0} ms`);
   }
-  
+
   /**
    * Fetch latest product documents by IDs from backend polling endpoint.
    * Backend endpoint: POST /api/firebase/products/fetch with body { ids: [...] }
@@ -2285,17 +2253,15 @@ export class ProductService {
     try {
       const url = `${environment.domainUrl}/api/firebase/products/fetch`;
       const payload = { ids: ids.map(id => String(id)) };
-      const res = await firstValueFrom(this.http.post<any>(url, payload).pipe(
+      const res = await firstValueFrom(this.http.post<any[]>(url, payload).pipe(
         catchError(err => {
           console.warn('fetchProductsByIds: backend fetch failed', err);
           return of([]);
         })
       ));
-      // Backend có thể trả về 1 object đơn lẻ hoặc 1 mảng các object.
-      const list: any[] = Array.isArray(res) ? res : (res ? [res] : []);
 
-      if (list.length > 0) {
-        for (const p of list) {
+      if (Array.isArray(res) && res.length > 0) {
+        for (const p of res) {
           try {
             // ensure the returned doc is persisted into IndexedDB so UI sees freshest data
             await this.updateProductFromIndexedDB(p as Product);
@@ -2305,13 +2271,13 @@ export class ProductService {
         }
       }
 
-      return list as Product[];
+      return Array.isArray(res) ? (res as Product[]) : [];
     } catch (err) {
       console.warn('fetchProductsByIds unexpected error', err);
       return [];
     }
   }
-  
+
   /**
    * Fetch latest products (optionally limited) from backend endpoint.
    * GET /api/firebase/products/latest?limit=NN
@@ -2406,8 +2372,8 @@ export class ProductService {
       console.log(`ℹ️ handleProductOnHandUpdated called for id=${productId}, onHand=${onHandValue}, basePrice=${basePriceValue}, cost=${costValue}, code=${codeValue}, fullName=${fullNameValue}`);
       await this.ensureDBInitialized();
 
-  // Try direct lookup first
-  let product = await this.indexedDBService.getByKey<Product>(this.dbName, this.dbVersion, this.storeName, productId);
+      // Try direct lookup first
+      let product = await this.indexedDBService.getByKey<Product>(this.dbName, this.dbVersion, this.storeName, productId);
       if (!product) {
         console.warn(`⚠️ Real-time: Product ${productId} not found by numeric key. Attempting fallback lookups...`);
 
@@ -2934,7 +2900,42 @@ export class ProductService {
       }
     }
   }
+  /**
+   * ✅ NEW: Lấy TẤT CẢ products từ Firebase KHÔNG dùng cache
+   * Sử dụng endpoint /api/firebase/products/fetch với { all: true }
+   */
+  getAllProductsFromFirebaseFresh(options?: {
+    includeInactive?: boolean;
+    includeDeleted?: boolean;
+  }): Observable<Product[]> {
+    console.log('🔄 Gọi API Firebase FRESH (không cache) - /api/firebase/products/fetch');
 
+    const payload = {
+      all: true,
+      include_inactive: options?.includeInactive ?? false,
+      include_deleted: options?.includeDeleted ?? false
+    };
+
+    return this.http.post<Product[]>(
+      `${environment.domainUrl}/api/firebase/products/fetch`,
+      payload
+    ).pipe(
+      map(products => {
+        const result = Array.isArray(products) ? products : [];
+        console.log(`📦 Nhận được ${result.length} products từ Firebase (fresh)`);
+
+        // Update local cache
+        this.firebaseProductsCache = result;
+        this.cacheTimestamp = Date.now();
+
+        return result;
+      }),
+      catchError((err) => {
+        console.error('❌ Lỗi khi lấy products từ Firebase (fresh):', err);
+        return of([]);
+      })
+    );
+  }
   // WebSocket control methods removed — client no longer manages a socket connection.
   // If you were calling `disconnectProductSocket()` or checking socket status, prefer
   // to stop relying on socket state; use `fetchProductsByIds` / `fetchLatestProducts` instead.

@@ -554,37 +554,289 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
 
 
   /**
-   * REFACTORED: Now uses ReloadOrchestratorService
-   * Reduced from ~160 lines to ~15 lines
+   * ✅ FIXED: Reload với thứ tự API calls đúng
+   * OnHand từ Firebase là source of truth - KHÔNG preserve OnHand cũ
    */
-  async reload() {
-    // Show loading indicator
+  async reload(): Promise<void> {
     this.isReloading = true;
 
     try {
-      // Delegate to ReloadOrchestratorService
-      const result = await this.reloadOrchestrator.reload();
+      console.log('🔄 ========== BẮT ĐẦU RELOAD ==========');
+      console.log('📋 Thứ tự: KiotViet → Firebase (fresh) → Sync → IndexedDB');
 
-      // Hydrate UI data after reload
-      try {
-        await this.hydrateSalesDbData(result.success ? 'reload-final' : 'reload-error');
-      } catch (hydrateErr) {
-        console.error('❌ Lỗi khi hydrate SalesDB sau reload:', hydrateErr);
+      // Force clear cache
+      this.productService.forceClearCache();
+
+      // =============================
+      // BƯỚC 1: Fetch từ KiotViet
+      // =============================
+      console.log('\n📥 BƯỚC 1: Lấy dữ liệu từ KiotViet...');
+      const kiotvietProducts = await this.productService.fetchAllProductsFromBackend();
+
+      if (!kiotvietProducts || kiotvietProducts.length === 0) {
+        console.error('❌ Không tải được sản phẩm từ KiotViet');
+        return;
+      }
+      console.log(`✅ KiotViet: ${kiotvietProducts.length} sản phẩm`);
+
+      // =============================
+      // BƯỚC 2: Fetch từ Firebase (FRESH - không cache)
+      // =============================
+      console.log('\n📥 BƯỚC 2: Lấy dữ liệu từ Firebase (FRESH)...');
+
+      const firebaseProducts = await firstValueFrom(
+        this.productService.getAllProductsFromFirebaseFresh({
+          includeInactive: true,
+          includeDeleted: false
+        })
+      ).catch(err => {
+        console.error('❌ Lỗi fetch Firebase fresh:', err);
+        return [] as Product[];
+      });
+
+      console.log(`✅ Firebase (fresh): ${firebaseProducts.length} sản phẩm`);
+
+      // ✅ Log sample OnHand từ Firebase để verify
+      const firebaseSample = firebaseProducts.slice(0, 3);
+      console.log('🔍 Sample OnHand từ Firebase:', firebaseSample.map(p => ({
+        Id: p.Id,
+        Code: p.Code,
+        OnHand: p.OnHand
+      })));
+
+      // =============================
+      // BƯỚC 3: Sync KiotViet → Firebase
+      // =============================
+      console.log('\n☁️ BƯỚC 3: Sync KiotViet → Firebase...');
+      const syncResult = await this.productService.fetchAndSaveMergedProductsFromBackend(false);
+      console.log(`✅ Sync: ${syncResult.success ? 'Thành công' : 'Thất bại'}`);
+
+      // =============================
+      // BƯỚC 4: Merge - ƯU TIÊN OnHand TỪ FIREBASE
+      // =============================
+      console.log('\n💾 BƯỚC 4: Merge và lưu IndexedDB...');
+
+      // ✅ QUAN TRỌNG: Tạo map OnHand từ Firebase trước
+      const firebaseOnHandMap = new Map<number, number>();
+      for (const p of firebaseProducts) {
+        if (p?.Id != null) {
+          const onHand = Number(p.OnHand);
+          if (Number.isFinite(onHand)) {
+            firebaseOnHandMap.set(p.Id, onHand);
+          }
+        }
+      }
+      console.log(`📊 Firebase OnHand map: ${firebaseOnHandMap.size} products`);
+
+      // Merge products: lấy data từ KiotViet, nhưng OnHand từ Firebase
+      const mergedProductsMap = new Map<number, Product>();
+
+      for (const p of kiotvietProducts) {
+        if (p?.Id) {
+          const productCopy = { ...p };
+
+          // ✅ GHI ĐÈ OnHand bằng giá trị từ Firebase (nếu có)
+          const firebaseOnHand = firebaseOnHandMap.get(p.Id);
+          if (firebaseOnHand !== undefined) {
+            productCopy.OnHand = firebaseOnHand;
+          }
+
+          mergedProductsMap.set(p.Id, productCopy);
+        }
       }
 
-      // Log summary
-      if (result.success) {
-        console.log('✅ Reload hoàn tất thành công!');
-        console.log(`📊 Đã xóa ${result.cleanupResult.deletedCount} orphaned products`);
-      } else {
-        console.warn('⚠️ Reload không hoàn toàn thành công');
+      // Thêm products chỉ có trong Firebase (inactive, etc.)
+      for (const p of firebaseProducts) {
+        if (p?.Id && !mergedProductsMap.has(p.Id)) {
+          mergedProductsMap.set(p.Id, p);
+        }
       }
+
+      const mergedProducts = Array.from(mergedProductsMap.values());
+      console.log(`📦 Merged: ${mergedProducts.length} products`);
+
+      // ✅ Log sample merged OnHand để verify
+      const mergedSample = mergedProducts.slice(0, 3);
+      console.log('🔍 Sample OnHand sau merge:', mergedSample.map(p => ({
+        Id: p.Id,
+        Code: p.Code,
+        OnHand: p.OnHand
+      })));
+
+      // ✅ Lưu vào IndexedDB - KHÔNG preserve OnHand (đã merge đúng ở trên)
+      await this.forceUpdateIndexedDB(mergedProducts, false);
+
+      // =============================
+      // BƯỚC 5: Verify IndexedDB
+      // =============================
+      console.log('\n🔍 BƯỚC 5: Verify IndexedDB...');
+      const afterCount = await this.productService.countProductsInIndexedDb();
+      console.log(`📊 IndexedDB có ${afterCount} products`);
+
+      // ✅ Verify OnHand trong IndexedDB
+      const verifyProducts = await this.productService.getAllProductsFromIndexedDB();
+      const verifySample = verifyProducts.slice(0, 3);
+      console.log('🔍 Sample OnHand trong IndexedDB sau reload:', verifySample.map(p => ({
+        Id: p.Id,
+        Code: p.Code,
+        OnHand: p.OnHand
+      })));
+
+      // =============================
+      // BƯỚC 6-7: Cleanup, Hydrate
+      // =============================
+      console.log('\n🧹 BƯỚC 6: Cleanup orphaned products...');
+      const cleanupResult = await this.productService.cleanupOrphanedProductsFromAPI(mergedProducts);
+      console.log(`✅ Cleanup: Đã xóa ${cleanupResult.deletedCount} orphaned`);
+
+      console.log('\n🔄 BƯỚC 7: Refresh local state...');
+      this.allProducts = await this.productService.getAllProductsFromIndexedDB();
+      this.groupedProducts = this.groupService.group(this.allProducts);
+      await this.syncCartItemsWithIndexedDB();
+
+      console.log('\n✅ ========== RELOAD HOÀN TẤT ==========');
+      console.log(`📊 Final: KiotViet(${kiotvietProducts.length}) + Firebase(${firebaseProducts.length}) → IndexedDB(${afterCount})`);
+
+    } catch (error) {
+      console.error('❌ Lỗi khi reload:', error);
     } finally {
-      // Hide loading indicator
       this.isReloading = false;
     }
   }
+  /**
+ * ✅ FIXED: Force update IndexedDB - KHÔNG preserve OnHand khi reload
+ * OnHand từ Firebase là source of truth
+ */
+  private async forceUpdateIndexedDB(products: Product[], preserveOnHand: boolean = false): Promise<void> {
+    if (!products || products.length === 0) {
+      console.warn('⚠️ Không có products để lưu');
+      return;
+    }
 
+    try {
+      let onHandMap = new Map<number, number>();
+
+      // ✅ CHỈ preserve OnHand khi được yêu cầu (ví dụ: khi sync từ KiotViet)
+      if (preserveOnHand) {
+        console.log('  📖 Đọc OnHand hiện tại từ IndexedDB để preserve.. .');
+        const existingProducts = await this.productService.getAllProductsFromIndexedDB();
+
+        for (const existing of existingProducts) {
+          if (existing && existing.Id != null) {
+            const onHand = Number(existing.OnHand);
+            if (Number.isFinite(onHand)) {
+              onHandMap.set(existing.Id, onHand);
+            }
+          }
+        }
+        console.log(`  📊 Đã lưu OnHand của ${onHandMap.size} products để preserve`);
+      } else {
+        console.log('  ℹ️ KHÔNG preserve OnHand - sử dụng OnHand từ source (Firebase)');
+      }
+
+      // Chuẩn bị products
+      const productsToSave: Product[] = [];
+      for (const product of products) {
+        if (!product || product.Id == null) continue;
+
+        const productCopy = { ...product };
+
+        // ✅ CHỈ preserve OnHand khi flag = true
+        if (preserveOnHand) {
+          const preservedOnHand = onHandMap.get(product.Id);
+          if (preservedOnHand !== undefined) {
+            productCopy.OnHand = preservedOnHand;
+          }
+        }
+        // ✅ Nếu preserveOnHand = false, giữ nguyên OnHand từ product (Firebase)
+
+        productsToSave.push(productCopy);
+      }
+      console.log(`  📦 Chuẩn bị ${productsToSave.length} products để lưu`);
+
+      // Clear và save
+      console.log('  🗑️ Clear IndexedDB.. .');
+      await this.indexedDBService.clear('SalesDB', 4, 'products');
+
+      console.log('  💾 Lưu products vào IndexedDB...');
+      await this.indexedDBService.putMany('SalesDB', 4, 'products', productsToSave);
+
+      // Verify
+      const savedCount = await this.indexedDBService.count('SalesDB', 4, 'products');
+      console.log(`  ✅ Đã lưu ${savedCount} products vào IndexedDB`);
+
+      if (savedCount !== productsToSave.length) {
+        console.error(`  ❌ Mismatch: saved ${savedCount}, expected ${productsToSave.length}`);
+      }
+
+      // Invalidate cache
+      this.productService.forceClearCache();
+
+      // ✅ Log sample để verify OnHand
+      const sampleProducts = productsToSave.slice(0, 3);
+      console.log('  🔍 Sample products saved:', sampleProducts.map(p => ({
+        Id: p.Id,
+        Code: p.Code,
+        OnHand: p.OnHand
+      })));
+
+    } catch (error) {
+      console.error('❌ Lỗi khi forceUpdateIndexedDB:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ NEW: Retry update IndexedDB với transaction riêng
+   */
+  private async retryUpdateIndexedDB(products: Product[]): Promise<void> {
+    try {
+      console.log('  🔄 Retry: Mở transaction mới...');
+
+      const db = await this.indexedDBService.getDB('SalesDB', 3);
+      const tx = db.transaction('products', 'readwrite');
+      const store = tx.objectStore('products');
+
+      // Clear store
+      console.log('  🗑️ Retry: Clear store...');
+      await store.clear();
+
+      // Add từng product
+      console.log(`  💾 Retry: Thêm ${products.length} products...`);
+      let addedCount = 0;
+      for (const product of products) {
+        if (product && product.Id != null) {
+          try {
+            await store.put(product);
+            addedCount++;
+          } catch (putErr) {
+            console.error(`  ❌ Lỗi khi put product ${product.Id}:`, putErr);
+          }
+        }
+      }
+
+      await tx.done;
+      console.log(`  ✅ Retry: Đã thêm ${addedCount} products`);
+
+    } catch (error) {
+      console.error('❌ Retry thất bại:', error);
+    }
+  }
+
+  /**
+   * ✅ HELPER: Fetch all products từ Firebase (chỉ gọi 1 lần)
+   */
+  private async fetchAllProductsFromFirebase(): Promise<Product[]> {
+    try {
+      const response = await firstValueFrom(
+        this.productService.getAllProductsFromFirebase()
+      );
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('❌ Lỗi khi fetch products từ Firebase:', error);
+      return [];
+    }
+  }
 
   /**
    * TODO: REFACTOR - Use CheckoutOrchestratorService
@@ -600,7 +852,6 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     });
   }
   async checkout() {
-
     // =============================
     //  BLOCK 1: EARLY VALIDATION
     // =============================
@@ -659,7 +910,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       const reValidation = this.checkoutOrchestrator.validateInvoiceHasItems(currentInvoice);
       const reCartValidation = this.checkoutOrchestrator.validateCartNotEmpty(this.cartItems);
       if (!reValidation.valid || !reCartValidation.valid) {
-        alert('Giỏ hàng trống!');
+        alert('Giỏ hàng trống! ');
         return;
       }
 
@@ -683,10 +934,10 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       // Ensure VAT
       invoice.invoiceVAT = this.ensureInvoiceVat(currentInvoice);
 
-      // Ensure invoice.id exists
+      // Ensure invoice. id exists
       if (!invoice.id) {
         invoice.id = this.generateUUID();
-        console.warn('Generated missing invoice.id:', invoice.id);
+        console.warn('Generated missing invoice. id:', invoice.id);
       }
 
       // =============================
@@ -791,17 +1042,20 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       }
 
       // =============================
-      //  BLOCK 7: LOCAL ONHAND ADJUSTMENT
+      //  BLOCK 7: LOCAL ONHAND ADJUSTMENT (SỬA LỖI CHÍNH)
       // =============================
       const preAdjustmentOnHand = new Map<number, number>();
       let localRealtimeUpdateMap = new Map<number, number>();
 
       try {
+        // ✅ SỬA: Gọi applyLocalOnHandAdjustments và đảm bảo cập nhật IndexedDB
         localRealtimeUpdateMap = await this.applyLocalOnHandAdjustments(this.cartItems, preAdjustmentOnHand);
+        console.log('✅ Local OnHand adjustments applied:', localRealtimeUpdateMap.size, 'products updated');
       } catch (error) {
         console.error('❌ local onHand adjust error:', error);
       }
 
+      // Gửi cập nhật OnHand lên Firebase
       if (localRealtimeUpdateMap.size > 0) {
         const payload = Array.from(localRealtimeUpdateMap.entries()).map(([Id, OnHand]) => ({ Id, OnHand }));
         try {
@@ -811,6 +1065,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
             const url = environment.domainUrl + '/api/firebase/update/products';
             await firstValueFrom((this.productService as any).http.put(url, payload));
           }
+          console.log('✅ OnHand updates sent to Firebase');
         } catch (notifyErr) {
           console.warn('⚠️ Failed to send immediate OnHand update:', notifyErr);
         }
@@ -831,21 +1086,32 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       this.lastCartItemsLength = resetState.lastCartItemsLength;
 
       // =============================
-      //  BLOCK 9: FINAL SERVER SYNC IF ONLINE
+      //  BLOCK 9: FETCH AFFECTED PRODUCTS ONLY (✅ SỬA: Dùng /api/firebase/products/fetch thay vì get/products)
       // =============================
       if (invoiceSentToServer) {
         try {
-          const affectedIds = new Set<number>();
-          for (const item of invoice.cartItems || []) {
-            if (item?.product?.Id != null) {
-              affectedIds.add(Number(item.product.Id));
+          // ✅ Chỉ fetch các sản phẩm bị ảnh hưởng thay vì toàn bộ
+          const affectedIds = this.extractAffectedProductIds(invoice);
+
+          if (affectedIds.length > 0) {
+            console.log(`🔄 Fetching ${affectedIds.length} affected products from Firebase... `);
+
+            // ✅ SỬ DỤNG /api/firebase/products/fetch thay vì /api/firebase/get/products
+            const fetchedProducts = await this.productService.fetchProductsByIds(affectedIds);
+
+            // ✅ Cập nhật IndexedDB với dữ liệu mới từ Firebase
+            if (fetchedProducts && fetchedProducts.length > 0) {
+              for (const product of fetchedProducts) {
+                await this.productService.updateProductFromIndexedDB(product);
+              }
+              console.log(`✅ Updated ${fetchedProducts.length} products in IndexedDB from Firebase`);
             }
-          }
-          if (affectedIds.size > 0) {
-            await this.productService.fetchProductsByIds(Array.from(affectedIds));
+
+            // ✅ Cập nhật cache local
+            await this.updateLocalCacheAfterCheckout(fetchedProducts);
           }
         } catch (err) {
-          console.warn('⚠️ Failed to sync products after checkout:', err);
+          console.warn('⚠️ Failed to fetch affected products after checkout:', err);
         }
       }
 
@@ -868,6 +1134,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
           if (res?.updated_products?.length > 0) {
             const ids = res.updated_products.map((p: any) => Number(p.Id)).filter((x: unknown) => Number.isFinite(x));
             if (ids.length > 0) {
+              // ✅ Dùng fetchProductsByIds thay vì sync toàn bộ
               await this.productService.fetchProductsByIds(ids);
             }
           }
@@ -882,6 +1149,58 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     } finally {
       this.isCheckoutInProgress = false;
     }
+  }
+
+  /**
+   * ✅ HELPER: Extract affected product IDs from invoice
+   */
+  private extractAffectedProductIds(invoice: InvoiceTab): number[] {
+    const affectedIds = new Set<number>();
+
+    for (const item of invoice.cartItems || []) {
+      // Thêm product ID trực tiếp
+      if (item?.product?.Id != null) {
+        affectedIds.add(Number(item.product.Id));
+      }
+
+      // Thêm tất cả sản phẩm trong group (để đảm bảo OnHand đồng bộ)
+      const masterUnitId = item?.product?.MasterUnitId || item?.product?.Id;
+      if (masterUnitId != null) {
+        const group = this.groupedProducts[masterUnitId] as Product[] | undefined;
+        if (group && group.length > 0) {
+          for (const variant of group) {
+            if (variant?.Id != null) {
+              affectedIds.add(Number(variant.Id));
+            }
+          }
+        }
+      }
+    }
+
+    return Array.from(affectedIds).filter(id => Number.isFinite(id));
+  }
+
+  /**
+   * ✅ HELPER: Update local cache after checkout
+   */
+  private async updateLocalCacheAfterCheckout(products: Product[]): Promise<void> {
+    if (!products || products.length === 0) return;
+
+    for (const product of products) {
+      if (product?.Id != null) {
+        // Cập nhật trong groupedProducts
+        this.updateCachedProductOnHand(product.Id, product.OnHand);
+
+        // Cập nhật trong cartItems nếu còn hiển thị
+        const cartItem = this.cartItems.find(item => item.product?.Id === product.Id);
+        if (cartItem) {
+          cartItem.product.OnHand = product.OnHand;
+        }
+      }
+    }
+
+    // Refresh groupedProducts
+    await this.groupProduct();
   }
 
   private notifyInsufficientStock(): void {

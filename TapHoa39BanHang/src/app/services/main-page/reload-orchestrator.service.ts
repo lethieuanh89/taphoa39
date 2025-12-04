@@ -7,6 +7,12 @@ import { Product } from '../../models/product.model';
 /**
  * Service orchestrator cho reload và sync operations
  * Tách toàn bộ logic reload phức tạp ra khỏi component
+ * 
+ * THỨ TỰ API CALLS:
+ * 1. /api/kiotviet/items/all - Lấy data từ KiotViet
+ * 2. /api/firebase/get/products - Lấy data từ Firebase  
+ * 3. /api/sync/kiotviet/firebase/products - Sync KiotViet → Firebase
+ * 4.  Cập nhật IndexedDB với data đã sync
  */
 @Injectable({
   providedIn: 'root'
@@ -28,6 +34,12 @@ export class ReloadOrchestratorService {
 
   /**
    * Main reload method - orchestrates toàn bộ reload process
+   * 
+   * THỨ TỰ ĐÚNG:
+   * 1. Fetch từ KiotViet (/api/kiotviet/items/all)
+   * 2. Fetch từ Firebase (/api/firebase/get/products)
+   * 3. Sync KiotViet → Firebase (/api/sync/kiotviet/firebase/products)
+   * 4. Cập nhật IndexedDB
    */
   async reload(): Promise<{
     success: boolean;
@@ -49,113 +61,180 @@ export class ReloadOrchestratorService {
     let reloadSucceeded = false;
 
     try {
-    console.log('🔄 Bắt đầu reload dữ liệu.. .');
+      console.log('🔄 Bắt đầu reload dữ liệu.. .');
+      console.log('📋 Thứ tự API calls: KiotViet → Firebase → Sync → IndexedDB');
 
-    // Force clear cache để đảm bảo lấy dữ liệu mới nhất
-    this. productService.forceClearCache();
+      // Force clear cache để đảm bảo lấy dữ liệu mới nhất
+      this.productService.forceClearCache();
 
-    // Bước 1: Fetch products từ backend (KiotViet)
-    const apiProducts = await this. fetchProductsFromBackend();
-    if (!apiProducts || apiProducts.length === 0) {
-      this.showError('Không tải được danh sách sản phẩm từ KiotViet, thử lại sau.');
-      return { success: false, seededIndexedDB: false, cleanupResult };
+      // =============================
+      // BƯỚC 1: Fetch từ KiotViet (/api/kiotviet/items/all)
+      // =============================
+      console.log('📥 BƯỚC 1: Lấy dữ liệu từ KiotViet...');
+      const kiotvietProducts = await this.fetchProductsFromKiotViet();
+      
+      if (! kiotvietProducts || kiotvietProducts.length === 0) {
+        this.showError('Không tải được danh sách sản phẩm từ KiotViet, thử lại sau.');
+        return { success: false, seededIndexedDB: false, cleanupResult };
+      }
+      console.log(`✅ BƯỚC 1 hoàn tất: Nhận được ${kiotvietProducts.length} sản phẩm từ KiotViet`);
+
+      // =============================
+      // BƯỚC 2: Fetch từ Firebase (/api/firebase/get/products)
+      // =============================
+      console. log('📥 BƯỚC 2: Lấy dữ liệu từ Firebase.. .');
+      const firebaseProducts = await this.fetchProductsFromFirebase();
+      console.log(`✅ BƯỚC 2 hoàn tất: Nhận được ${firebaseProducts.length} sản phẩm từ Firebase`);
+
+      // =============================
+      // BƯỚC 3: Sync KiotViet → Firebase (/api/sync/kiotviet/firebase/products)
+      // =============================
+      console.log('☁️ BƯỚC 3: Đồng bộ KiotViet → Firebase...');
+      const syncResult = await this.syncKiotVietToFirebase();
+      
+      if (!syncResult.success) {
+        console.error('❌ BƯỚC 3 thất bại: Sync không thành công');
+        return { success: false, seededIndexedDB, cleanupResult };
+      }
+      console.log('✅ BƯỚC 3 hoàn tất: Sync thành công');
+
+      // Lấy products đã sync (ưu tiên từ sync result, fallback về firebase)
+      const syncedProducts = syncResult.products && syncResult.products. length > 0
+        ? syncResult. products
+        : firebaseProducts;
+
+      // =============================
+      // BƯỚC 4: Cleanup orphaned products
+      // =============================
+      console.log('🧹 BƯỚC 4: Cleanup orphaned products...');
+      cleanupResult = await this.cleanupOrphanedProducts(kiotvietProducts, firebaseProducts);
+      console.log(`✅ BƯỚC 4 hoàn tất: Đã xóa ${cleanupResult.deletedCount} orphaned products`);
+
+      // =============================
+      // BƯỚC 5: Cập nhật IndexedDB với data đã sync
+      // =============================
+      console.log('💾 BƯỚC 5: Cập nhật IndexedDB...');
+      
+      // Merge products: ưu tiên KiotViet, bổ sung từ Firebase
+      const mergedProducts = this.mergeProducts(kiotvietProducts, syncedProducts);
+      
+      // Seed hoặc reseed IndexedDB
+      const currentCount = await this.productService.countProductsInIndexedDb();
+      
+      if (currentCount === 0) {
+        // IndexedDB trống, seed mới
+        seededIndexedDB = await this.productService.ensureIndexedDbSeeded(mergedProducts);
+        console.log('🆕 IndexedDB trống, đã seed dữ liệu mới');
+      } else {
+        // IndexedDB có data, reseed để đảm bảo đồng bộ
+        await this.productService.reseedIndexedDbWithApiProducts(mergedProducts);
+        console.log('🔄 IndexedDB đã được reseed với data mới');
+      }
+
+      // =============================
+      // BƯỚC 6: Verify số lượng
+      // =============================
+      console.log('🔍 BƯỚC 6: Verify dữ liệu...');
+      await this.verifyAndLogResults(mergedProducts. length);
+
+      reloadSucceeded = true;
+      console.log('✅ Tất cả dữ liệu đã được reload thành công! ');
+      console.log(`📊 Tóm tắt: KiotViet(${kiotvietProducts.length}) + Firebase(${firebaseProducts.length}) → IndexedDB(${mergedProducts.length})`);
+
+    } catch (err) {
+      console.error('❌ Lỗi khi reload dữ liệu:', err);
+      reloadSucceeded = false;
+    } finally {
+      this.isReloading = false;
     }
 
-    let apiProductCount = apiProducts.length;
-
-    // Bước 2: Seed IndexedDB nếu cần
-    seededIndexedDB = await this.productService.ensureIndexedDbSeeded(apiProducts);
-
-    if (seededIndexedDB) {
-      console.log('🆕 IndexedDB trống nên đã seed dữ liệu sản phẩm trong quá trình reload.');
-    }
-
-    // Bước 3: Sync KiotViet -> Firebase
-    const syncResult = await this.syncKiotVietToFirebase();
-    if (!syncResult.success) {
-      return { success: false, seededIndexedDB, cleanupResult };
-    }
-
-    // Cập nhật apiProducts từ sync result nếu có
-    if (syncResult.products && syncResult.products. length > 0) {
-      console.log(`✅ Đã lấy ${syncResult.products. length} products từ Firebase`);
-      apiProductCount = syncResult.products.length;
-    }
-
-    // Bước 4: Cleanup orphaned products
-    cleanupResult = await this.cleanupOrphanedProducts(apiProducts);
-
-    // Bước 5: LUÔN sync từ Firebase về IndexedDB (không phụ thuộc vào seededIndexedDB)
-    // Đây là thay đổi quan trọng - đảm bảo products được cập nhật từ Firebase
-    console.log('🔄 Sync products từ Firebase về IndexedDB.. .');
-    this.productService.forceClearCache(); // Clear cache trước khi sync
-    await this.syncFromFirebaseToIndexedDB();
-
-    // Bước 6: Verify và reseed nếu cần
-    await this.verifyAndReseedIfNeeded(apiProducts, apiProductCount);
-
-    reloadSucceeded = true;
-    console.log('✅ Tất cả dữ liệu đã được reload thành công! ');
-    console.log(`📊 Tóm tắt: Đã xóa ${cleanupResult.deletedCount} orphaned products và đồng bộ sản phẩm với Firebase. `);
-
-  } catch (err) {
-    console.error('❌ Lỗi khi reload dữ liệu:', err);
-    reloadSucceeded = false;
-  } finally {
-    this.isReloading = false;
+    return { success: reloadSucceeded, seededIndexedDB, cleanupResult };
   }
 
-  return { success: reloadSucceeded, seededIndexedDB, cleanupResult };
-}
-
   /**
-   * Fetch products từ backend
+   * BƯỚC 1: Fetch products từ KiotViet
+   * API: /api/kiotviet/items/all
    */
-  private async fetchProductsFromBackend(): Promise<Product[]> {
+  private async fetchProductsFromKiotViet(): Promise<Product[]> {
     try {
+      console.log('  → Gọi API: /api/kiotviet/items/all');
       const products = await this.productService.fetchAllProductsFromBackend();
+      
       if (!products || products.length === 0) {
-        console.warn('⚠️ Không nhận được danh sách sản phẩm từ backend.');
+        console.warn('⚠️ Không nhận được danh sách sản phẩm từ KiotViet.');
         return [];
       }
+      
+      console.log(`  ← Nhận được ${products.length} sản phẩm từ KiotViet`);
       return products;
     } catch (err) {
-      console.error('❌ Lỗi khi fetch products từ backend:', err);
+      console.error('❌ Lỗi khi fetch products từ KiotViet:', err);
       return [];
     }
   }
 
   /**
-   * Sync KiotViet -> Firebase
+   * BƯỚC 2: Fetch products từ Firebase
+   * API: /api/firebase/get/products
+   */
+  private async fetchProductsFromFirebase(): Promise<Product[]> {
+    try {
+      console.log('  → Gọi API: /api/firebase/get/products');
+      
+      // Clear cache trước khi fetch
+      this.productService.forceClearCache();
+      
+      const products = await firstValueFrom(
+        this.productService. getAllProductsFromFirebase()
+      ). catch(err => {
+        console.warn('⚠️ Lỗi khi lấy products từ Firebase:', err);
+        return [] as Product[];
+      });
+      
+      console.log(`  ← Nhận được ${products?. length || 0} sản phẩm từ Firebase`);
+      return products || [];
+    } catch (err) {
+      console.error('❌ Lỗi khi fetch products từ Firebase:', err);
+      return [];
+    }
+  }
+
+  /**
+   * BƯỚC 3: Sync KiotViet → Firebase
+   * API: /api/sync/kiotviet/firebase/products
    */
   private async syncKiotVietToFirebase(): Promise<{
     success: boolean;
     products?: Product[];
     stats?: any;
   }> {
-    console.log('☁️ Đồng bộ KiotViet -> Firebase (optimized)...');
     try {
+      console.log('  → Gọi API: /api/sync/kiotviet/firebase/products');
+      
       const syncResult = await this.productService.syncKiotVietToFirebase();
 
       if (!syncResult.success) {
         const errorMsg = syncResult.error || 'Đồng bộ thất bại';
-        console.error('❌ Sync failed:', errorMsg);
+        console.error('  ← Sync failed:', errorMsg);
+        
         this.snackBar.open(`❌ Lỗi đồng bộ: ${errorMsg}`, 'Đóng', {
           duration: 6000,
           panelClass: ['error-snackbar'],
           horizontalPosition: 'center',
           verticalPosition: 'top'
         });
+        
         return { success: false };
       }
 
-      console.log('✅ Sync succeeded:', syncResult.stats);
       const stats = syncResult.stats;
       const timeSpent = stats?.total_time_seconds || 0;
+      
+      console.log(`  ← Sync thành công: ${stats?.updated_or_created || 0} cập nhật, ${stats?.unchanged || 0} không đổi (${timeSpent}s)`);
 
       // Show success message
       this.snackBar.open(
-        `✅ Đồng bộ thành công! ${stats?.updated_or_created || 0} cập nhật, ${stats?.unchanged || 0} không đổi (${timeSpent}s)`,
+        `✅ Đồng bộ thành công!  ${stats?.updated_or_created || 0} cập nhật, ${stats?.unchanged || 0} không đổi (${timeSpent}s)`,
         'Đóng',
         {
           duration: 5000,
@@ -172,48 +251,39 @@ export class ReloadOrchestratorService {
       };
 
     } catch (err: any) {
-      console.error('⚠️ Lỗi khi syncKiotVietToFirebase():', err);
-      this.snackBar.open(`❌ Lỗi: ${err?.message || 'Không xác định'}`, 'Đóng', {
+      console.error('❌ Lỗi khi syncKiotVietToFirebase:', err);
+      
+      this.snackBar.open(`❌ Lỗi: ${err?. message || 'Không xác định'}`, 'Đóng', {
         duration: 6000,
         panelClass: ['error-snackbar'],
         horizontalPosition: 'center',
         verticalPosition: 'top'
       });
+      
       return { success: false };
     }
   }
 
   /**
-   * Cleanup orphaned products
+   * BƯỚC 4: Cleanup orphaned products
+   * Xóa products trong IndexedDB không còn tồn tại trong KiotViet hoặc Firebase
    */
-  private async cleanupOrphanedProducts(apiProducts: Product[]): Promise<{
+  private async cleanupOrphanedProducts(
+    kiotvietProducts: Product[],
+    firebaseProducts: Product[]
+  ): Promise<{
     deletedCount: number;
     totalChecked: number;
   }> {
-    console.log('🧹 Bước: Cleanup orphaned products (preserve inactive from Firebase)...');
     try {
-      // Lấy products từ Firebase
-      const firebaseProducts = await firstValueFrom(
-        this.productService.getAllProductsFromFirebase()
-      ).catch(err => {
-        console.warn('⚠️ Không lấy được products từ Firebase, tiếp tục với API only', err);
-        return [] as Product[];
-      }) || [];
-
-      // Merge products từ API và Firebase
-      const mergedProductsMap = new Map<number, Product>();
-      for (const p of apiProducts || []) {
-        if (p && p.Id) mergedProductsMap.set(p.Id, p);
-      }
-      for (const p of firebaseProducts || []) {
-        if (p && p.Id && !mergedProductsMap.has(p.Id)) mergedProductsMap.set(p.Id, p);
-      }
-
-      const combinedProducts = Array.from(mergedProductsMap.values());
-
-      // Cleanup
-      const result = await this.productService.cleanupOrphanedProductsFromAPI(combinedProducts);
-      console.log(`✅ Cleanup hoàn thành: đã xóa ${result.deletedCount}/${result.totalChecked} orphaned products`);
+      // Merge products từ cả 2 nguồn
+      const mergedProducts = this.mergeProducts(kiotvietProducts, firebaseProducts);
+      
+      console.log(`  → Cleanup với ${mergedProducts. length} products hợp lệ`);
+      
+      const result = await this.productService.cleanupOrphanedProductsFromAPI(mergedProducts);
+      
+      console.log(`  ← Đã xóa ${result.deletedCount}/${result.totalChecked} orphaned products`);
       return result;
 
     } catch (err) {
@@ -223,40 +293,40 @@ export class ReloadOrchestratorService {
   }
 
   /**
-   * Sync từ Firebase về IndexedDB
+   * Merge products từ KiotViet và Firebase
+   * Ưu tiên data từ KiotViet (source of truth)
    */
-  private async syncFromFirebaseToIndexedDB(): Promise<void> {
-    console.log('ℹ️ Sync products từ Firebase về IndexedDB...');
-    try {
-      await this.productService.syncProductsFromFirebaseToIndexedDB();
-      console.log('✅ Đã sync products từ Firebase về IndexedDB.');
-    } catch (err) {
-      console.warn('⚠️ Lỗi khi sync từ Firebase về IndexedDB:', err);
+  private mergeProducts(kiotvietProducts: Product[], firebaseProducts: Product[]): Product[] {
+    const mergedMap = new Map<number, Product>();
+    
+    // Thêm products từ KiotViet trước (source of truth)
+    for (const p of kiotvietProducts || []) {
+      if (p && p.Id) {
+        mergedMap.set(p.Id, p);
+      }
     }
+    
+    // Thêm products từ Firebase nếu chưa có trong KiotViet
+    // (có thể là products inactive hoặc chỉ tồn tại trong Firebase)
+    for (const p of firebaseProducts || []) {
+      if (p && p.Id && !mergedMap.has(p. Id)) {
+        mergedMap.set(p.Id, p);
+      }
+    }
+    
+    return Array.from(mergedMap.values());
   }
 
   /**
-   * Verify và reseed nếu cần
+   * BƯỚC 6: Verify và log kết quả
    */
-  private async verifyAndReseedIfNeeded(
-    apiProducts: Product[],
-    apiProductCount: number
-  ): Promise<void> {
-    let indexedDbCount = await this.productService.countProductsInIndexedDb();
-
-    if (indexedDbCount !== apiProductCount) {
-      console.warn(
-        `⚠️ IndexedDB hiện có ${indexedDbCount} sản phẩm trong khi API trả về ${apiProductCount}. Thực hiện reseed để đồng bộ.`
-      );
-
-      await this.productService.reseedIndexedDbWithApiProducts(apiProducts);
-      indexedDbCount = await this.productService.countProductsInIndexedDb();
-
-      if (indexedDbCount === apiProductCount) {
-        console.log('✅ IndexedDB đã được reseed và khớp số lượng với API.');
-      } else {
-        console.error(`❌ Sau khi reseed, IndexedDB vẫn có ${indexedDbCount}/${apiProductCount} sản phẩm.`);
-      }
+  private async verifyAndLogResults(expectedCount: number): Promise<void> {
+    const indexedDbCount = await this.productService. countProductsInIndexedDb();
+    
+    if (indexedDbCount === expectedCount) {
+      console.log(`  ✅ Verify thành công: IndexedDB có ${indexedDbCount} sản phẩm (khớp với expected ${expectedCount})`);
+    } else {
+      console.warn(`  ⚠️ Verify: IndexedDB có ${indexedDbCount} sản phẩm (expected ${expectedCount})`);
     }
   }
 
@@ -264,7 +334,7 @@ export class ReloadOrchestratorService {
    * Show error message
    */
   private showError(message: string): void {
-    this.snackBar.open(message, 'Đóng', {
+    this.snackBar. open(message, 'Đóng', {
       duration: 4000,
       panelClass: ['error-snackbar']
     });
