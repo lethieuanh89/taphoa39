@@ -896,6 +896,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     cartItems: CartItem[],
     snapshot?: Map<number, number>
   ): Promise<Map<number, number>> {
+    console.log('🔄 [Checkout] Bắt đầu áp dụng điều chỉnh OnHand local cho', cartItems.length, 'items');
     const aggregated: Record<number, number> = {};
 
     for (const item of cartItems) {
@@ -916,6 +917,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       if (!group || group.length === 0) {
         const productId = Number(item.product.Id);
         aggregated[productId] = (aggregated[productId] ?? 0) + quantity;
+        console.log(`📊 [Checkout] Product ${productId} (${item.product.Code}): quantity=${quantity}`);
         continue;
       }
 
@@ -932,6 +934,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       }
     }
 
+    console.log('📊 [Checkout] Tổng số products cần cập nhật OnHand:', Object.keys(aggregated).length);
     const result = new Map<number, number>();
     for (const [productIdStr, delta] of Object.entries(aggregated)) {
       const productId = Number(productIdStr);
@@ -950,11 +953,13 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       }
       const newOnHand = currentOnHand - numericDelta;
 
+      console.log(`🔄 [Checkout] Product ${productId}: currentOnHand=${currentOnHand}, delta=${numericDelta}, newOnHand=${newOnHand}`);
       await this.productService.updateProductOnHandLocal(productId, newOnHand);
       this.updateCachedProductOnHand(productId, newOnHand);
       result.set(productId, newOnHand);
     }
 
+    console.log(`✅ [Checkout] Đã cập nhật OnHand cho ${result.size} products trong IndexedDB`);
     return result;
   }
 
