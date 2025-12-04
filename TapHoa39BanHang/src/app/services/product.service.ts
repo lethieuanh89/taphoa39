@@ -800,15 +800,17 @@ export class ProductService {
     }
   }
 
-  async syncProductsFromFirebaseToIndexedDB(): Promise<void> {
+  async syncProductsFromFirebaseToIndexedDB(firebaseProducts?: Product[]): Promise<void> {
     try {
       // Đảm bảo IndexedDB đã được khởi tạo
       await this.ensureDBInitialized();
 
       console.log('🔄 Bắt đầu đồng bộ products từ Firebase về IndexedDB...');
 
-      // Lấy tất cả products từ Firebase (sử dụng cache nếu có)
-      const allProducts = await this.getProductsFromFirebaseWithCache();
+      // Lấy tất cả products từ Firebase (sử dụng cache nếu có, hoặc sử dụng products đã truyền vào)
+      const allProducts = firebaseProducts && firebaseProducts.length > 0
+        ? firebaseProducts
+        : await this.getProductsFromFirebaseWithCache();
       console.log('🔎 [DEBUG] syncProductsFromFirebaseToIndexedDB: nhận được', (allProducts && allProducts.length) || 0, 'products từ Firebase');
 
       if (!allProducts || allProducts.length === 0) {
@@ -1492,6 +1494,7 @@ export class ProductService {
       // normalize to the Product model field
       (product as any).OnHand = onHand;
       await this.indexedDBService.put<Product>(this.dbName, this.dbVersion, this.storeName, product);
+      console.log(`✅ [IndexedDB] Updated product ${productId} OnHand: ${onHand}`);
       if (this.indexedDbProductsCache) {
         const cached = this.indexedDbProductsCache.find(p => p.Id === productId);
         if (cached) {
@@ -1499,6 +1502,8 @@ export class ProductService {
         }
       }
       await this.syncOutOfStockEntry(product as Product);
+    } else {
+      console.warn(`⚠️ [IndexedDB] Product ${productId} not found in IndexedDB, cannot update OnHand to ${onHand}`);
     }
   }
 

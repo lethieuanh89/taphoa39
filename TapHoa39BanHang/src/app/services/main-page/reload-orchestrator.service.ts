@@ -82,14 +82,16 @@ export class ReloadOrchestratorService {
       apiProductCount = syncResult.products.length;
     }
 
-    // Bước 4: Cleanup orphaned products
-    cleanupResult = await this.cleanupOrphanedProducts(apiProducts);
+    // Bước 4: Cleanup orphaned products và lấy firebaseProducts
+    const cleanupData = await this.cleanupOrphanedProducts(apiProducts);
+    cleanupResult = cleanupData.result;
+    const firebaseProducts = cleanupData.firebaseProducts;
 
     // Bước 5: LUÔN sync từ Firebase về IndexedDB (không phụ thuộc vào seededIndexedDB)
     // Đây là thay đổi quan trọng - đảm bảo products được cập nhật từ Firebase
+    // Sử dụng firebaseProducts đã fetch ở bước 4 để tránh gọi API lần nữa
     console.log('🔄 Sync products từ Firebase về IndexedDB.. .');
-    this.productService.forceClearCache(); // Clear cache trước khi sync
-    await this.syncFromFirebaseToIndexedDB();
+    await this.syncFromFirebaseToIndexedDB(firebaseProducts);
 
     // Bước 6: Verify và reseed nếu cần
     await this.verifyAndReseedIfNeeded(apiProducts, apiProductCount);
@@ -185,10 +187,14 @@ export class ReloadOrchestratorService {
 
   /**
    * Cleanup orphaned products
+   * Returns both cleanup result and firebaseProducts to avoid duplicate API calls
    */
   private async cleanupOrphanedProducts(apiProducts: Product[]): Promise<{
-    deletedCount: number;
-    totalChecked: number;
+    result: {
+      deletedCount: number;
+      totalChecked: number;
+    };
+    firebaseProducts: Product[];
   }> {
     console.log('🧹 Bước: Cleanup orphaned products (preserve inactive from Firebase)...');
     try {
@@ -214,21 +220,34 @@ export class ReloadOrchestratorService {
       // Cleanup
       const result = await this.productService.cleanupOrphanedProductsFromAPI(combinedProducts);
       console.log(`✅ Cleanup hoàn thành: đã xóa ${result.deletedCount}/${result.totalChecked} orphaned products`);
-      return result;
+      return {
+        result,
+        firebaseProducts
+      };
 
     } catch (err) {
       console.error('❌ Lỗi khi cleanup orphaned products:', err);
-      return { deletedCount: 0, totalChecked: 0 };
+      return {
+        result: { deletedCount: 0, totalChecked: 0 },
+        firebaseProducts: []
+      };
     }
   }
 
   /**
    * Sync từ Firebase về IndexedDB
+   * @param firebaseProducts Optional products already fetched from Firebase to avoid duplicate API calls
    */
-  private async syncFromFirebaseToIndexedDB(): Promise<void> {
+  private async syncFromFirebaseToIndexedDB(firebaseProducts?: Product[]): Promise<void> {
     console.log('ℹ️ Sync products từ Firebase về IndexedDB...');
     try {
-      await this.productService.syncProductsFromFirebaseToIndexedDB();
+      if (firebaseProducts && firebaseProducts.length > 0) {
+        console.log(`📦 Sử dụng ${firebaseProducts.length} products đã fetch từ Firebase (tránh gọi API trùng)`);
+        await this.productService.syncProductsFromFirebaseToIndexedDB(firebaseProducts);
+      } else {
+        console.log('🔄 Fetch products mới từ Firebase...');
+        await this.productService.syncProductsFromFirebaseToIndexedDB();
+      }
       console.log('✅ Đã sync products từ Firebase về IndexedDB.');
     } catch (err) {
       console.warn('⚠️ Lỗi khi sync từ Firebase về IndexedDB:', err);
