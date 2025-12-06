@@ -18,10 +18,6 @@ export class AppComponent implements OnInit {
 
   constructor(
     private router: Router,
-    // private productService: ProductService,
-    // private customerService: CustomerService,
-    // private invoiceService: InvoiceService,
-    // private kiotvietService: KiotvietService,
   ) {
   }
 
@@ -82,26 +78,5 @@ export class AppComponent implements OnInit {
     localStorage.removeItem('kv_retailer');
     localStorage.removeItem('kv_branch_id');
   }
-  // async fromKiotViet() {
-  //   console.log('Starting sync from KiotViet to IndexedDB...');
-  //   await this.productService.loadItemsFromKiotVietToIndexedDB();
-  //   await this.customerService.loadCustomersFromKiotvietToIndexedDB();
-  //   await this.kiotvietService.syncProductFromKiotvietToFirebase('');
-  //   await this.kiotvietService.syncCustomerFromKiotvietToFirebase('');
-  //   console.log('Sync from KiotViet to IndexedDB finished.');
-  // }
-  // async fromIndexedDB() {
-  //   console.log('Starting sync from IndexedDB to Firebase...');
-  //   await this.invoiceService.syncAllInvoicesFromIndexedDBToFirebase();
-  //   await this.productService.syncAllProductsFromIndexedDBToFirebase();
-  //   await this.customerService.syncAllCustomersFromIndexedDBToFirebase();
-  //   console.log('Sync from IndexedDB to Firebase finished.');
-  // }
-  // async fromFirebase() {
-  //   console.log('Starting sync from Firebase to IndexedDB...');
-  //   await this.productService.syncProductsFromFirebaseToIndexedDB();
-  //   await this.customerService.syncCustomersFromFirebaseToIndexedDB();
-  //   await this.invoiceService.syncInvoicesFromFirestoreToIndexedDB();
-  //   console.log('Sync from Firebase to IndexedDB finished.');
-  // }
+  
 }

@@ -570,11 +570,16 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       // =============================
       // BƯỚC 1: Fetch từ KiotViet
       // =============================
-      console.log('\n📥 BƯỚC 1: Lấy dữ liệu từ KiotViet...');
+      console.log('\n📥 BƯỚC 1: Lấy dữ liệu từ KiotViet.. .');
       const kiotvietProducts = await this.productService.fetchAllProductsFromBackend();
 
       if (!kiotvietProducts || kiotvietProducts.length === 0) {
         console.error('❌ Không tải được sản phẩm từ KiotViet');
+        // ✅ THÊM: Hiển thị snackbar lỗi
+        this.snackBar.open('❌ Không tải được sản phẩm từ KiotViet', 'Đóng', {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        });
         return;
       }
       console.log(`✅ KiotViet: ${kiotvietProducts.length} sản phẩm`);
@@ -697,8 +702,32 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       console.log('\n✅ ========== RELOAD HOÀN TẤT ==========');
       console.log(`📊 Final: KiotViet(${kiotvietProducts.length}) + Firebase(${firebaseProducts.length}) → IndexedDB(${afterCount})`);
 
+      // ✅ THÊM: Hiển thị snackbar thành công
+      this.snackBar.open(
+        `✅ Reload thành công! ${afterCount} sản phẩm đã được cập nhật. `,
+        'Đóng',
+        {
+          duration: 4000,
+          horizontalPosition: 'center',
+          verticalPosition: 'bottom',
+          panelClass: ['success-snackbar']
+        }
+      );
+
     } catch (error) {
       console.error('❌ Lỗi khi reload:', error);
+
+      // ✅ THÊM: Hiển thị snackbar lỗi
+      this.snackBar.open(
+        `❌ Lỗi khi reload: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+        'Đóng',
+        {
+          duration: 5000,
+          horizontalPosition: 'center',
+          verticalPosition: 'bottom',
+          panelClass: ['error-snackbar']
+        }
+      );
     } finally {
       this.isReloading = false;
     }
@@ -1042,37 +1071,67 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       }
 
       // =============================
-      //  BLOCK 7: LOCAL ONHAND ADJUSTMENT (SỬA LỖI CHÍNH)
+      //  BLOCK 7: GỌI API update_onhand_batch ĐỂ TÍNH TOÁN VÀ CẬP NHẬT
       // =============================
       const preAdjustmentOnHand = new Map<number, number>();
-      let localRealtimeUpdateMap = new Map<number, number>();
 
-      try {
-        // ✅ SỬA: Gọi applyLocalOnHandAdjustments và đảm bảo cập nhật IndexedDB
-        localRealtimeUpdateMap = await this.applyLocalOnHandAdjustments(this.cartItems, preAdjustmentOnHand);
-        console.log('✅ Local OnHand adjustments applied:', localRealtimeUpdateMap.size, 'products updated');
-      } catch (error) {
-        console.error('❌ local onHand adjust error:', error);
-      }
-
-      // Gửi cập nhật OnHand lên Firebase
-      if (localRealtimeUpdateMap.size > 0) {
-        const payload = Array.from(localRealtimeUpdateMap.entries()).map(([Id, OnHand]) => ({ Id, OnHand }));
-        try {
-          if (typeof (this.productService as any).updateProductOnHandToFireStore === 'function') {
-            await (this.productService as any).updateProductOnHandToFireStore(payload);
-          } else if ((this.productService as any).http) {
-            const url = environment.domainUrl + '/api/firebase/update/products';
-            await firstValueFrom((this.productService as any).http.put(url, payload));
+      // Lấy OnHand hiện tại từ IndexedDB trước khi gọi API
+      for (const item of this.cartItems) {
+        if (item?.product?.Id != null) {
+          const masterUnitId = item.product.MasterUnitId || item.product.Id;
+          const group = this.groupedProducts[masterUnitId] as Product[] | undefined;
+          if (group) {
+            for (const variant of group) {
+              if (variant?.Id != null && !preAdjustmentOnHand.has(variant.Id)) {
+                const latest = await this.productService.getProductByIdFromIndexedDB(variant.Id);
+                if (latest) {
+                  preAdjustmentOnHand.set(variant.Id, Number(latest.OnHand ?? 0));
+                }
+              }
+            }
           }
-          console.log('✅ OnHand updates sent to Firebase');
-        } catch (notifyErr) {
-          console.warn('⚠️ Failed to send immediate OnHand update:', notifyErr);
         }
       }
 
+      try {
+        console.log('🔄 Gọi API update_onhand_batch để tính toán và cập nhật OnHand.. .');
+
+        // ✅ GỌI ĐÚNG API: /api/firebase/products/update_onhand_batch
+        const response = await this.productService.updateProductsOnHandFromInvoiceToFireBase(
+          invoice,
+          this.groupedProducts,
+          this.manuallyEditedOnHandProductIds,
+          'decrease',  // Trừ OnHand
+          preAdjustmentOnHand
+        );
+
+        console.log('✅ API update_onhand_batch response:', response);
+
+        // API đã tự động cập nhật IndexedDB trong updateProductsOnHandFromInvoiceToFireBase
+        // (xem dòng 1436-1444 trong product. service.ts)
+
+        // Đánh dấu invoice đã sync OnHand
+        invoice.onHandSynced = true;
+
+        // Clear manually edited IDs
+        this.manuallyEditedOnHandProductIds.clear();
+
+        // Cập nhật local cache
+        if (response?.updated_products && Array.isArray(response.updated_products)) {
+          for (const updatedItem of response.updated_products) {
+            if (updatedItem?.Id != null && updatedItem?.new_OnHand != null) {
+              this.updateCachedProductOnHand(Number(updatedItem.Id), Number(updatedItem.new_OnHand));
+            }
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ Lỗi khi gọi update_onhand_batch:', error);
+        invoice.onHandSynced = false;
+      }
+
       // =============================
-      //  BLOCK 8: RESET UI
+      //  BLOCK 8: RESET UI (giữ nguyên)
       // =============================
       const resetState = this.checkoutOrchestrator.getResetStateAfterCheckout();
       this.discountAmount = resetState.discountAmount;
@@ -1084,6 +1143,8 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       this.showDropdown = resetState.showDropdown;
       this.activeIndex = resetState.activeIndex;
       this.lastCartItemsLength = resetState.lastCartItemsLength;
+
+
 
       // =============================
       //  BLOCK 9: FETCH AFFECTED PRODUCTS ONLY (✅ SỬA: Dùng /api/firebase/products/fetch thay vì get/products)
@@ -2801,7 +2862,6 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
   async updateOrderStatusToChecked(orderId: string): Promise<void> {
     try {
       const updateData = { status: 'checked' };
-      await firstValueFrom(this.orderService.updateOrderToFirestore(orderId, updateData));
 
       // Update in IndexedDB
       const order = await this.orderService.getOrderFromDBById(orderId);
@@ -3043,7 +3103,6 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     };
     // Gửi lên Firestore
     try {
-      await firstValueFrom(this.orderService.addOrderToFirestore(order));
       // Phát WebSocket real-time (nếu muốn)
       await this.orderService.notifyOrderCreated(order);
       // Lưu vào IndexedDB (để đồng bộ offline)
@@ -3157,16 +3216,15 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
 
     try {
       // Update in Firestore
-      await firstValueFrom(this.orderService.updateOrderToFirestore(this.originalOrderId, updatedOrder));
-      console.log(`✅ Order ${this.originalOrderId} updated in Firestore`);
+      // Notify via WebSocket
+      await this.orderService.notifyOrderUpdated(updatedOrder);
+      console.log(`✅ Order ${this.originalOrderId} update notified via WebSocket`);
 
       // Update in IndexedDB
       await this.orderService.updateOrderInDB(updatedOrder);
       console.log(`✅ Order ${this.originalOrderId} updated in IndexedDB`);
 
-      // Notify via WebSocket
-      await this.orderService.notifyOrderUpdated(updatedOrder);
-      console.log(`✅ Order ${this.originalOrderId} update notified via WebSocket`);
+
 
       alert(`Đã lưu chỉnh sửa đơn hàng ${this.originalOrderId}!`);
 
@@ -3192,12 +3250,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       this.formattedCustomerPaid = '0';
       this.invoiceNote = '';
 
-      // Optionally notify realtime
-      if (typeof (this.invoiceService as any).notifyInvoiceUpdated === 'function') {
-        try {
-          await (this.invoiceService as any).notifyInvoiceUpdated(updatedOrder);
-        } catch (e) { /* ignore */ }
-      }
+    
     } catch (error) {
       console.error('❌ Error saving edited order:', error);
       alert('Lỗi khi lưu chỉnh sửa đơn hàng!');

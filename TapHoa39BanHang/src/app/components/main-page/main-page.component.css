@@ -1,12 +1,31 @@
-.edit-onhand-popup {
-    background-color: #0070F4;
-    padding: 10px;
-    position: relative;
-    width: 160px;
-    border-radius: 10px;
-    justify-items: flex-end;
-    left: 705px;
-    right: 0px
+/* Success snackbar */
+::ng-deep .success-snackbar {
+  background-color: #4caf50 !important;
+  color: white !important;
+}
+
+::ng-deep .success-snackbar .mat-mdc-snack-bar-action {
+  color: white !important;
+}
+
+/* Error snackbar */
+::ng-deep .error-snackbar {
+  background-color: #f44336 !important;
+  color: white !important;
+}
+
+::ng-deep .error-snackbar .mat-mdc-snack-bar-action {
+  color: white !important;
+}
+
+/* Info snackbar */
+::ng-deep .info-snackbar {
+  background-color: #2196f3 !important;
+  color: white !important;
+}
+
+::ng-deep .info-snackbar .mat-mdc-snack-bar-action {
+  color: white !important;
 }
 
 .edit-onhand-popup input {

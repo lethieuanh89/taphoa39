@@ -10,8 +10,8 @@ import { TimeZoneService } from './time-zone.service';
 @Injectable({
   providedIn: 'root'
 })
-export class OrderService implements OnInit {
-  private dbName = 'SalesDB';
+export class OrderService {
+  private dbName = 'Orders';
   private dbVersion = 3; // Synchronized with CategoryService version
   private storeName = 'order';
 
@@ -37,16 +37,19 @@ export class OrderService implements OnInit {
     private indexedDBService: IndexedDBService,
     private timeZoneService: TimeZoneService,
     private firebaseService: FirebaseService
-  ) {}
+  ) { }
 
-  ngOnInit() {}
 
   async initDB(): Promise<void> {
     try {
       const upgradeFn = (db: any) => {
         if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName, { keyPath: 'id' });
+          const orders = db.createObjectStore('order', { keyPath: 'id' });
+          orders.createIndex('name', 'name', { unique: false });
+          orders.createIndex('TotalPrice', 'totalPrice', { unique: false });
+          console.log(`✅ Đã tạo object store 'order' thành công`);
         }
+       
       };
 
       await this.indexedDBService.getDB(this.dbName, this.dbVersion, upgradeFn);
@@ -57,6 +60,7 @@ export class OrderService implements OnInit {
         await this.indexedDBService.closeDB(this.dbName);
         await this.indexedDBService.getDB(this.dbName, this.dbVersion + 1, upgradeFn);
       }
+
     } catch (error) {
       console.error('❌ Error initializing IndexedDB:', error);
     }
@@ -232,7 +236,7 @@ export class OrderService implements OnInit {
             this.orderCreatedSubject.next(serverOrder);
             return;
           }
-        } catch {}
+        } catch { }
       }
       // Fallback: persist locally and emit event so UI stays responsive
       await this.addOrderToDB(order);
@@ -260,7 +264,7 @@ export class OrderService implements OnInit {
           this.orderUpdatedSubject.next(serverOrder);
           return;
         }
-      } catch {}
+      } catch { }
       // Fallback: update local DB and emit
       await this.updateOrderInDB(order);
       this.orderUpdatedSubject.next(order);
@@ -278,14 +282,14 @@ export class OrderService implements OnInit {
         await this.deleteOrderFromDB(orderId);
         this.orderDeletedSubject.next(orderId);
         return;
-      } catch {}
+      } catch { }
       // Fallback: still emit deletion event
       this.orderDeletedSubject.next(orderId);
     } catch (error) {
       console.error('❌ notifyOrderDeleted failed, deleting locally:', error);
       try {
         await this.deleteOrderFromDB(orderId);
-      } catch {}
+      } catch { }
       this.orderDeletedSubject.next(orderId);
     }
   }

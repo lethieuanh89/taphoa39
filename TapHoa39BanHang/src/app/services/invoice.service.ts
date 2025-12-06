@@ -1421,9 +1421,7 @@ export class InvoiceService implements OnInit {
         for (const productIdStr of Object.keys(updates)) {
           const productId = Number(productIdStr);
           try {
-            const dbName = 'SalesDB';
-            const dbVersion = 3; // Synchronized with CategoryService version
-            const storeName = 'products';
+
             const existingProduct = await this.productService.getProductByIdFromIndexedDB(productId);
             if (existingProduct) {
               const oldOnHand = currentOnHandMap[productId] ?? existingProduct.OnHand ?? 0;

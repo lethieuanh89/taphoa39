@@ -27,9 +27,6 @@ export class KiotvietService {
   private retailer: any | null = null;// Replace with your retailer
   private LatestBranchId: any | null = null; // Replace with your branch ID
   private accessToken: string | null = null;
-  private dbName = 'SalesDB';
-  private dbVersion = 3; // Synchronized with CategoryService version
-  private storeName = 'outofstock';
 
   kiotviet_items_api = "/api/kiotviet/items/all";
   kiotviet_customers_api = "/api/kiotviet/customers";

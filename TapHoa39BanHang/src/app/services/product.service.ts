@@ -27,6 +27,7 @@ type ProductRealtimeUpdate = {
 })
 export class ProductService {
   private dbName = 'SalesDB';
+  private orderDBName = 'Orders';
   private dbVersion = 3; // Synchronized with CategoryService version
   private storeName = 'products';
   private readonly outOfStockStoreName = 'outofstock';
@@ -217,12 +218,7 @@ export class ProductService {
           console.log(`✅ Đã tạo object store 'outofstock' thành công`);
         }
 
-        if (!db.objectStoreNames.contains('order')) {
-          const outofstore = db.createObjectStore('order', { keyPath: 'id' });
-          outofstore.createIndex('name', 'name', { unique: false });
-          outofstore.createIndex('TotalPrice', 'totalPrice', { unique: false });
-          console.log(`✅ Đã tạo object store 'order' thành công`);
-        }
+        
       };
 
       // Try opening with the configured version first
@@ -2327,13 +2323,13 @@ export class ProductService {
   // Lưu đơn đặt hàng vào IndexedDB
   async addOrderToIndexedDB(order: any): Promise<void> {
     await this.ensureDBInitialized();
-    await this.indexedDBService.put('SalesDB', 1, 'order', order);
+    await this.indexedDBService.put(this.orderDBName, 1, 'order', order);
   }
 
   // Lấy toàn bộ đơn đặt hàng từ IndexedDB
   async getAllOrdersFromIndexedDB(): Promise<any[]> {
     await this.ensureDBInitialized();
-    return await this.indexedDBService.getAll('SalesDB', 1, 'order');
+    return await this.indexedDBService.getAll(this.orderDBName, 1, 'order');
   }
 
   // WebSocket initialization and listeners removed — backend no longer accepts incoming websocket updates.
@@ -2936,6 +2932,54 @@ export class ProductService {
       })
     );
   }
+async addProduct(product: Product): Promise<any> {
+    const url = `${environment.domainUrl}/api/firebase/add/product`;
+    return firstValueFrom(this. http.post(url, product));
+  }
+
+  /**
+   * Add multiple products to Firebase (batch)
+   */
+  async addProducts(products: Product[]): Promise<any> {
+    const url = `${environment.domainUrl}/api/firebase/add/products/batch`;
+    return firstValueFrom(this.http.post(url, { products }));
+  }
+
+  /**
+   * Get all products from Firebase
+   */
+  async getProducts(options?: { 
+    includeInactive?: boolean; 
+    includeDeleted?: boolean 
+  }): Promise<Product[]> {
+    const params = new URLSearchParams();
+    if (options?.includeInactive) {
+      params.append('include_inactive', 'true');
+    }
+    if (options?.includeDeleted) {
+      params.append('include_deleted', 'true');
+    }
+    
+    const url = `${environment.domainUrl}/api/firebase/get/products? ${params.toString()}`;
+    return firstValueFrom(this. http.get<Product[]>(url));
+  }
+
+  /**
+   * Update products
+   */
+  async updateProducts(products: Partial<Product>[]): Promise<any> {
+    const url = `${environment.domainUrl}/api/firebase/update/products`;
+    return firstValueFrom(this. http.put(url, products));
+  }
+
+  /**
+   * Delete a product
+   */
+  async deleteProduct(productId: string | number): Promise<any> {
+    const url = `${environment.domainUrl}/api/firebase/products/del/${productId}`;
+    return firstValueFrom(this.http.delete(url));
+  }
+
   // WebSocket control methods removed — client no longer manages a socket connection.
   // If you were calling `disconnectProductSocket()` or checking socket status, prefer
   // to stop relying on socket state; use `fetchProductsByIds` / `fetchLatestProducts` instead.

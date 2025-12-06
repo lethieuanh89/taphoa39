@@ -627,7 +627,6 @@ export class OrderPageComponent implements OnInit, OnDestroy {
         try {
           // Update order status to 'canceled'
           const updateData = { status: 'canceled' };
-          await firstValueFrom(this.orderService.updateOrderToFirestore(order.id, updateData));
 
           // Update in IndexedDB
           const updatedOrder = await this.orderService.getOrderFromDBById(order.id);

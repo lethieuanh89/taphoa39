@@ -32,14 +32,14 @@ import { MatIconModule } from '@angular/material/icon';
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Quy đổi</mat-label>
-          <input matInput type="number" [(ngModel)]="conversion" placeholder="1" />
+          <input matInput type="number" [(ngModel)]="conversionValue" placeholder="1" />
           <mat-icon matPrefix>calculate</mat-icon>
           <span matSuffix *ngIf="data?.baseName">{{ data.baseName }}</span>
         </mat-form-field>
 
-        <div class="conversion-example" *ngIf="conversion && data?.baseName && name">
+        <div class="conversionValue-example" *ngIf="conversionValue && data?.baseName && name">
           <mat-icon>info</mat-icon>
-          <span>1 {{ name }} = {{ conversion }} {{ data.baseName }}</span>
+          <span>1 {{ name }} = {{ conversionValue }} {{ data.baseName }}</span>
         </div>
 
         <mat-form-field appearance="outline" class="full-width">
@@ -127,14 +127,14 @@ import { MatIconModule } from '@angular/material/icon';
 })
 export class UnitDialogComponent {
   name = '';
-  conversion: number | null = 1;
+  conversionValue: number | null = 1;
   price: number | null = null;
 
   constructor(private dialogRef: MatDialogRef<UnitDialogComponent>, @Inject(MAT_DIALOG_DATA) public data: any) {}
 
   save() {
-    if (!this.name || !this.conversion) return;
-    this.dialogRef.close({ saved: true, name: this.name, conversion: this.conversion, price: this.price });
+    if (!this.name || !this.conversionValue) return;
+    this.dialogRef.close({ saved: true, name: this.name, conversionValue: this.conversionValue, price: this.price });
   }
 
   cancel() {
