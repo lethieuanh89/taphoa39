@@ -37,7 +37,7 @@
     <p>Đang xử lý...</p>
   </div>
 
-  <table class="item-table" *ngIf="data.order.cartItems?.length">
+  <table class="item-table" *ngIf="data.order.cartItems.length">
     <thead>
       <tr>
         <th style="text-align: left;">Tên sản phẩm</th>
@@ -79,7 +79,7 @@
       </tr>
     </tbody>
   </table>
-  <p *ngIf="!data.order.cartItems?.length">Không có sản phẩm trong đơn đặt hàng.</p>
+  <p *ngIf="!data.order.cartItems.length">Không có sản phẩm trong đơn đặt hàng.</p>
 </mat-dialog-content>
 
 <mat-dialog-actions align="center">

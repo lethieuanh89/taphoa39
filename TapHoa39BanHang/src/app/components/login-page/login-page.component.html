@@ -1,15 +1,82 @@
 <div class="login-container">
-  <form (ngSubmit)="login()" autocomplete="off">
+  <form (ngSubmit)="currentStep === 'phone' ? sendOTP() : verifyOTP()" autocomplete="off">
     <h2>Đăng nhập đến Tạp Hóa 39</h2>
-    <div class="form-group">
-      <label for="username">Tài khoản</label>
-      <input id="username" name="username" [(ngModel)]="username" required autocomplete="username" />
+    
+    <!-- Phone Number Step -->
+    <div *ngIf="currentStep === 'phone'" class="step-container">
+      <div class="form-group">
+        <label for="phone">Số điện thoại</label>
+        <input 
+          id="phone" 
+          name="phone" 
+          type="tel"
+          [(ngModel)]="phoneNumber" 
+          placeholder="+84 786 185 405"
+          required 
+          autocomplete="tel"
+          [disabled]="isLoading"
+        />
+        <small class="hint">Nhập số điện thoại đã đăng ký</small>
+      </div>
+      
+      <button type="submit" [disabled]="isLoading || !isValidPhoneNumber()">
+        {{ isLoading ? 'Đang gửi...' : 'Gửi mã OTP' }}
+      </button>
     </div>
-    <div class="form-group">
-      <label for="password">Mật khẩu</label>
-      <input id="password" name="password" type="password" [(ngModel)]="password" required autocomplete="current-password" />
+
+    <!-- OTP Verification Step -->
+    <div *ngIf="currentStep === 'otp'" class="step-container">
+      <div class="phone-display">
+        <span class="phone-label">Số điện thoại:</span>
+        <span class="phone-value">{{ phoneNumber }}</span>
+        <button type="button" class="change-btn" (click)="backToPhone()" [disabled]="isLoading">
+          Thay đổi
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label for="otp">Nhập mã OTP</label>
+        <input 
+          id="otp" 
+          name="otp"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="6"
+          [(ngModel)]="otpCode"
+          (input)="onOtpInput($event)"
+          placeholder="000000"
+          required
+          autocomplete="one-time-code"
+          [disabled]="isLoading"
+          class="otp-input"
+        />
+        <small class="hint">Nhập mã 6 chữ số đã gửi đến điện thoại của bạn</small>
+      </div>
+
+      <button type="submit" [disabled]="isLoading || otpCode.length !== 6">
+        {{ isLoading ? 'Đang xác thực...' : 'Xác nhận' }}
+      </button>
+
+      <div class="resend-container">
+        <button 
+          type="button" 
+          class="resend-btn" 
+          (click)="resendOTP()" 
+          [disabled]="resendCountdown > 0 || isLoading"
+        >
+          {{ resendCountdown > 0 ?  'Gửi lại sau ' + resendCountdown + 's' : 'Gửi lại mã OTP' }}
+        </button>
+      </div>
     </div>
+
+    <!-- Success Message -->
+    <div class="success" *ngIf="successMessage">{{ successMessage }}</div>
+    
+    <!-- Error Message -->
     <div class="error" *ngIf="error">{{ error }}</div>
-    <button type="submit" [disabled]="isLoading">{{ isLoading ? 'Đang đăng nhập...' : 'Đăng nhập' }}</button>
   </form>
+
+  <!-- reCAPTCHA Container (invisible) -->
+  <div id="recaptcha-container"></div>
 </div>
