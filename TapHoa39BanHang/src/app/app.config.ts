@@ -6,7 +6,8 @@ import { provideProtractorTestingSupport } from '@angular/platform-browser';
 import { routes } from './app.routes';
 import { ProductService } from './services/product.service';
 
-import { provideFirebaseApp, initializeApp } from '@angular/fire/app';
+import { initializeApp } from 'firebase/app';
+import { provideFirebaseApp } from '@angular/fire/app';
 import { provideAuth, getAuth } from '@angular/fire/auth';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './interceptors/auth.interceptor';
@@ -18,13 +19,11 @@ function initSockets(ps: ProductService) {
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => getAuth()),
-    provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes),
-    provideHttpClient(),
     provideNativeDateAdapter(),
     provideProtractorTestingSupport(),
 
