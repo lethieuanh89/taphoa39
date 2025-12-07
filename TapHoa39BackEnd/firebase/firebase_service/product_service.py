@@ -4,13 +4,14 @@ import os
 from dotenv import load_dotenv
 import json
 import requests
-from FromKiotViet. get_authorization import auth_token
+from FromKiotViet.get_authorization import auth_token
 from Utility.get_env import LatestBranchId, retailer
 import hashlib
-from firebase. firebase_hanghoa. product_class import Product
+from firebase.firebase_hanghoa.product_class import Product
 from dateutil.parser import parse as parse_date
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
+from firebase.init_firebase import init_firestore
 
 load_dotenv()
 
@@ -26,21 +27,20 @@ API_HEADERS = {
     "branchid": LatestBranchId,
 }
 COLLECTION_NAME = "products"
-service_account_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_HANGHOA")
-if not service_account_json:
-    raise Exception("Missing FIREBASE_SERVICE_ACCOUNT_HANGHOA environment variable.")
 
-# Chuyển chuỗi JSON thành dict và tạo credential
-cred_dict = json.loads(service_account_json)
+# Sử dụng init_firestore thay vì khởi tạo trực tiếp
+db = init_firestore("FIREBASE_SERVICE_ACCOUNT_HANGHOA", app_name="hanghoa_app")
 
-cred = credentials.Certificate(cred_dict)
-firebase_admin.initialize_app(cred)
 
-db = firestore.client()
-COLLECTION_NAME = "products"
 
 class FirestoreProductService:
     def __init__(self, cache):
+        """
+        Initialize FirestoreProductService.
+        
+        Args:
+            cache: Cache object (from firebase.firebase_service.cache.Cache)
+        """
         self.cache = cache
         self.products_ref = db.collection(COLLECTION_NAME)
 
@@ -70,26 +70,19 @@ class FirestoreProductService:
         return not is_deleted
 
     def read_all_products(self, include_inactive: bool = False, include_deleted: bool = False):
-        """Read products from Firestore. 
-
-        By default, only active and not-deleted products are returned (backwards-compatible).
-        Set `include_inactive=True` to include products with `isActive=false`.
-        Set `include_deleted=True` to include products with `isDeleted=true`.
-        """
+        """Read products from Firestore."""
         cache_key = f"all_products:inactive={include_inactive}:deleted={include_deleted}"
         if self.cache.has(cache_key):
-            return self. cache.get(cache_key)
+            return self.cache.get(cache_key)
 
         docs = self.products_ref.stream()
         result = []
         for doc in docs:
-            data = doc. to_dict() or {}
+            data = doc.to_dict() or {}
 
-            # Determine item flags
             is_active = self._coerce_bool(data.get("isActive"), True)
-            is_deleted = self._coerce_bool(data. get("isDeleted"), False)
+            is_deleted = self._coerce_bool(data.get("isDeleted"), False)
 
-            # Apply filters based on function args
             if (not include_inactive) and (not is_active):
                 continue
             if (not include_deleted) and is_deleted:
@@ -98,14 +91,14 @@ class FirestoreProductService:
             enriched = dict(data)
             result.append(enriched)
 
-        self.cache.set(cache_key, result, ttl=300)  # Cache 5 phút
+        self.cache.set(cache_key, result, ttl=300)
         return result
 
     def read_product(self, product_id):
         if self.cache.has(product_id):
-            return self.cache. get(product_id)
+            return self.cache.get(product_id)
 
-        doc = self.products_ref.document(product_id).get()
+        doc = self.products_ref.document(str(product_id)).get()
         if doc.exists:
             product = doc.to_dict()
             self.cache.set(product_id, product, ttl=300)
@@ -113,6 +106,7 @@ class FirestoreProductService:
         return None
 
     def add_product(self, product):
+        """Add a single product to Firestore."""
         if not isinstance(product, dict):
             raise ValueError("product must be a dict")
 
@@ -125,28 +119,22 @@ class FirestoreProductService:
         if not self._should_store_product(product):
             doc_ref.delete()
             self.cache.invalidate(str(product_id))
-            self.cache.invalidate("all_products")
+            self.invalidate_all_product_caches()
             return {"message": "Product skipped because inactive or deleted", "skipped": True}
 
         # Add sync metadata
         product["SyncChecksum"] = self.hash_item(product)
-        product["SyncTimestamp"] = datetime. utcnow().isoformat()
+        product["SyncTimestamp"] = datetime.utcnow().isoformat()
 
         doc_ref.set(product)
         self.cache.invalidate(str(product_id))
-        self.cache.invalidate("all_products")
+        self.invalidate_all_product_caches()
         return {"message": "Product added", "product_id": str(product_id)}
 
     def add_products_batch(self, products: List[Dict]) -> Dict:
         """
-        ✅ NEW: Add multiple products to Firestore in batch. 
+        Add multiple products to Firestore in batch.
         Uses Firestore batch writes for efficiency (max 500 per batch).
-        
-        Args:
-            products: List of product dictionaries to add
-            
-        Returns:
-            Dict with status, message, counts and any errors
         """
         if not products:
             return {"status": "error", "message": "No products provided"}
@@ -165,7 +153,7 @@ class FirestoreProductService:
                     errors.append({"index": idx, "error": "Product must be a dict"})
                     continue
 
-                product_id = product_data.get("Id") or product_data. get("id")
+                product_id = product_data.get("Id") or product_data.get("id")
                 if not product_id:
                     errors.append({"index": idx, "error": "Missing Id"})
                     continue
@@ -176,11 +164,11 @@ class FirestoreProductService:
                     continue
 
                 # Add sync metadata
-                product_data["SyncChecksum"] = self. hash_item(product_data)
+                product_data["SyncChecksum"] = self.hash_item(product_data)
                 product_data["SyncTimestamp"] = datetime.utcnow().isoformat()
 
                 # Add to batch
-                doc_ref = self. products_ref. document(str(product_id))
+                doc_ref = self.products_ref.document(str(product_id))
                 batch.set(doc_ref, product_data)
                 added_count += 1
 
@@ -220,16 +208,16 @@ class FirestoreProductService:
             return {"status": "error", "message": str(e)}
 
     def update_product(self, product_id, updates):
-        doc_ref = self. products_ref. document(product_id)
+        doc_ref = self.products_ref.document(str(product_id))
         doc_ref.update(updates)
-        self. cache.invalidate(product_id)
-        self.cache. invalidate("all_products")
+        self.cache.invalidate(product_id)
+        self.invalidate_all_product_caches()
 
-        current_doc = doc_ref. get()
+        current_doc = doc_ref.get()
         if current_doc.exists and not self._should_store_product(current_doc.to_dict()):
             doc_ref.delete()
-            self.cache. invalidate(product_id)
-            self.cache.invalidate("all_products")
+            self.cache.invalidate(product_id)
+            self.invalidate_all_product_caches()
             return {"message": "Product removed because inactive or deleted"}
 
         return {"message": "Product updated"}
@@ -237,18 +225,17 @@ class FirestoreProductService:
     def update_products(self, products_dict):
         updated = []
         removed = []
-        # Gộp tất cả sản phẩm từ các group lại thành 1 list
         all_products = []
-        for group in products_dict. values():
+        for group in products_dict.values():
             if isinstance(group, list):
                 all_products.extend(group)
         for prod in all_products:
             if not isinstance(prod, dict):
                 continue
-            product_id = str(prod.get("Id") or prod. get("id"))
+            product_id = str(prod.get("Id") or prod.get("id"))
             if not product_id:
                 continue
-            doc_ref = self. products_ref. document(product_id)
+            doc_ref = self.products_ref.document(product_id)
             if not self._should_store_product(prod):
                 doc_ref.delete()
                 removed.append(product_id)
@@ -257,35 +244,32 @@ class FirestoreProductService:
             doc_ref.set(prod, merge=True)
             updated.append(product_id)
             self.cache.invalidate(product_id)
-        self.cache.invalidate("all_products")
+        self.invalidate_all_product_caches()
         response = {"message": f"Updated {len(updated)} products", "updated": updated}
         if removed:
             response["removed"] = removed
             response["message"] += f", removed {len(removed)} products"
         return response
 
-
     def delete_product(self, product_id):
-        self.products_ref.document(product_id).delete()
-        self. cache.invalidate(product_id)
-        self.cache. invalidate("all_products")
+        self.products_ref.document(str(product_id)).delete()
+        self.cache.invalidate(product_id)
+        self.invalidate_all_product_caches()
         return {"message": "Product deleted"}
     
     def group_product(self):
         """
-        Group products by Master Item (MasterUnitId=None) and their Child Items (MasterUnitId=Id of Master Item). 
-        Returns a dict: {master_id: {"master": master_product, "children": [child_products]}}
+        Group products by Master Item (MasterUnitId=None or 0) and their Child Items.
         """
-        all_products = self. read_all_products()
+        all_products = self.read_all_products()
         masters = {}
         children = []
-        # Phân loại master và child
         for prod in all_products:
-            if prod.get("MasterUnitId") is None or prod.get("MasterUnitId") == 0:
+            master_unit_id = prod.get("MasterUnitId")
+            if master_unit_id is None or master_unit_id == 0:
                 masters[str(prod.get("Id") or prod.get("id"))] = {"master": prod, "children": []}
             else:
                 children.append(prod)
-        # Gán child vào master tương ứng
         for child in children:
             master_id = str(child.get("MasterUnitId"))
             if master_id in masters:
@@ -293,21 +277,15 @@ class FirestoreProductService:
         return masters
     
     def get_products_by_master(self, master_id: int) -> List[Dict]:
-        """
-        ✅ NEW: Get all products that have the given master product ID.
-        Useful for getting all unit/attribute variants of a product. 
-        """
-        all_products = self. read_all_products(include_inactive=True, include_deleted=True)
+        """Get all products that have the given master product ID."""
+        all_products = self.read_all_products(include_inactive=True, include_deleted=True)
         return [
             p for p in all_products 
-            if p. get("MasterProductId") == master_id or p.get("MasterUnitId") == master_id
+            if p.get("MasterProductId") == master_id or p.get("MasterUnitId") == master_id
         ]
 
     def get_product_variants(self, product_id: int) -> Dict:
-        """
-        ✅ NEW: Get a product and all its variants (by unit and attributes).
-        Returns the master product and all related variants.
-        """
+        """Get a product and all its variants (by unit and attributes)."""
         master = self.read_product(str(product_id))
         if not master:
             return {"master": None, "variants": [], "total": 0}
@@ -322,18 +300,18 @@ class FirestoreProductService:
     
     def update_products_from_kiotviet_to_firestore(self):
         """Backwards-compatible wrapper for legacy callers."""
-        return self. sync_products_from_kiotviet()
+        return self.sync_products_from_kiotviet()
 
     def sync_products_from_kiotviet(self):
         """
         Optimized sync that:
-        1.  Fetches checksums from Firestore in one go
-        2.  Fetches products from KiotViet with timeout
-        3.  Compares and updates only changed products
-        4. Returns stats without re-fetching all data
+        1. Fetches checksums from Firestore in one go
+        2. Fetches products from KiotViet with timeout
+        3. Compares and updates only changed products
+        4.Returns stats without re-fetching all data
         """
         import time
-        start_time = time. time()
+        start_time = time.time()
 
         try:
             print("🔄 Bắt đầu đồng bộ sản phẩm từ KiotViet (tối ưu)...")
@@ -344,24 +322,24 @@ class FirestoreProductService:
             existing_checksums = {}
             existing_ids = set()
 
-            for doc in self.products_ref.select(["SyncChecksum"]). stream():
+            for doc in self.products_ref.select(["SyncChecksum"]).stream():
                 data = doc.to_dict() or {}
                 existing_checksums[doc.id] = data.get("SyncChecksum")
-                existing_ids.add(doc. id)
+                existing_ids.add(doc.id)
 
             checksum_time = time.time() - checksum_start
             print(f"  ✅ Đã lấy {len(existing_checksums)} checksums trong {checksum_time:.2f}s")
 
             # Step 2: Fetch products from KiotViet API
             print("  📥 Lấy sản phẩm từ KiotViet API...")
-            api_start = time. time()
+            api_start = time.time()
             api_items = self.fetch_api_items()
             api_time = time.time() - api_start
             print(f"  ✅ Đã lấy {len(api_items)} sản phẩm từ KiotViet trong {api_time:.2f}s")
 
             # Step 3: Compare and prepare updates
             print("  🔍 So sánh và chuẩn bị cập nhật...")
-            compare_start = time. time()
+            compare_start = time.time()
             to_upsert = []
             active_ids: Set[str] = set()
             deleted_count = 0
@@ -370,12 +348,12 @@ class FirestoreProductService:
 
             for item in api_items:
                 product_dict = item.__dict__ if hasattr(item, "__dict__") else dict(item)
-                doc_id = str(product_dict. get("Id"))
+                doc_id = str(product_dict.get("Id"))
                 if not doc_id:
                     continue
 
                 # Determine flags from API
-                is_deleted = self._coerce_bool(product_dict. get("isDeleted"), False)
+                is_deleted = self._coerce_bool(product_dict.get("isDeleted"), False)
                 is_active = self._coerce_bool(product_dict.get("isActive"), True)
 
                 # Count for reporting
@@ -396,6 +374,7 @@ class FirestoreProductService:
                 # Prepare payload to store in Firestore
                 product_to_store = dict(product_dict)
                 product_to_store["SyncChecksum"] = checksum
+                product_to_store["SyncTimestamp"] = datetime.utcnow().isoformat()
                 if not is_active:
                     product_to_store["StoreForIndexedDB"] = True
                 if is_deleted:
@@ -403,39 +382,39 @@ class FirestoreProductService:
 
                 to_upsert.append((doc_id, product_to_store))
 
-            compare_time = time. time() - compare_start
+            compare_time = time.time() - compare_start
             print(f"  ✅ So sánh hoàn tất trong {compare_time:.2f}s: {len(to_upsert)} cần cập nhật, {unchanged_count} không đổi")
 
             # Step 4: Batch update to Firestore
-            update_start = time. time()
+            update_time = 0
             if to_upsert:
                 print(f"  📤 Cập nhật {len(to_upsert)} sản phẩm lên Firestore...")
+                update_start = time.time()
                 BATCH_SIZE = 500
                 batch_count = 0
 
                 for i in range(0, len(to_upsert), BATCH_SIZE):
                     batch = db.batch()
                     for doc_id, payload in to_upsert[i : i + BATCH_SIZE]:
-                        doc_ref = self.products_ref. document(doc_id)
+                        doc_ref = self.products_ref.document(doc_id)
                         batch.set(doc_ref, payload, merge=True)
-                    batch. commit()
+                    batch.commit()
                     batch_count += 1
-                    if batch_count % 5 == 0:  # Log every 5 batches
+                    if batch_count % 5 == 0:
                         print(f"    Đã ghi {batch_count * BATCH_SIZE} sản phẩm...")
 
-                update_time = time. time() - update_start
+                update_time = time.time() - update_start
                 print(f"  ✅ Cập nhật hoàn tất trong {update_time:.2f}s ({batch_count} batches)")
             else:
                 print("  ℹ️ Không có sản phẩm nào cần cập nhật")
-                update_time = 0
 
-            # Step 5: Invalidate cache (only affected docs)
+            # Step 5: Invalidate cache
             print("  🗑️ Xóa cache...")
-            self.cache.invalidate("all_products")
+            self.invalidate_all_product_caches()
             for doc_id, _ in to_upsert:
                 self.cache.invalidate(doc_id)
 
-            total_time = time. time() - start_time
+            total_time = time.time() - start_time
 
             print(f"\n✅ Đồng bộ hoàn tất trong {total_time:.2f}s:")
             print(f"   - Tổng sản phẩm từ KiotViet: {len(api_items)}")
@@ -447,7 +426,7 @@ class FirestoreProductService:
             return {
                 "success": True,
                 "message": "Đồng bộ thành công",
-                "version": "optimized_v2",  # Version marker to verify code is running
+                "version": "optimized_v2",
                 "stats": {
                     "total_api_items": len(api_items),
                     "updated_or_created": len(to_upsert),
@@ -477,11 +456,10 @@ class FirestoreProductService:
 
     def fetch_firestore_items(self):
         print("Đang tải dữ liệu từ Firestore...")
-        products_ref = db.collection(COLLECTION_NAME)
-        docs = products_ref. stream()
+        docs = self.products_ref.stream()
         firestore_items = {}
         for doc in docs:
-            data = doc. to_dict()
+            data = doc.to_dict()
             item_id = data.get('Id')
             if item_id:
                 firestore_items[item_id] = {
@@ -496,7 +474,7 @@ class FirestoreProductService:
         single_batch = self._fetch_single_batch()
         if single_batch is not None:
             print(f"Đã nhận {len(single_batch)} sản phẩm từ API (single batch).")
-            return [Product. from_dict(item) for item in single_batch]
+            return [Product.from_dict(item) for item in single_batch]
 
         print("Single batch không đủ, chuyển sang phân trang...")
         return self._fetch_paginated_items()
@@ -510,7 +488,7 @@ class FirestoreProductService:
         }
 
         max_retries = 3
-        retry_delay = 2  # seconds
+        retry_delay = 2
 
         for attempt in range(max_retries):
             try:
@@ -518,7 +496,7 @@ class FirestoreProductService:
                     API_BASE_URL,
                     params=params,
                     headers=API_HEADERS,
-                    timeout=90  # Increased timeout for large dataset
+                    timeout=90
                 )
                 response.raise_for_status()
                 payload = response.json() or {}
@@ -531,7 +509,7 @@ class FirestoreProductService:
                     return None
                 return items
 
-            except requests.exceptions. Timeout:
+            except requests.exceptions.Timeout:
                 print(f"⚠️ Timeout khi fetch single batch (lần {attempt + 1}/{max_retries})")
                 if attempt < max_retries - 1:
                     import time
@@ -539,11 +517,11 @@ class FirestoreProductService:
                     continue
                 raise
 
-            except requests.exceptions. RequestException as e:
+            except requests.exceptions.RequestException as e:
                 print(f"⚠️ Lỗi khi fetch single batch (lần {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     import time
-                    time. sleep(retry_delay)
+                    time.sleep(retry_delay)
                     continue
                 raise
 
@@ -569,7 +547,6 @@ class FirestoreProductService:
                 "pageIndex": page_index,
             }
 
-            # Retry logic for each page
             page_fetched = False
             for attempt in range(max_retries):
                 try:
@@ -577,9 +554,9 @@ class FirestoreProductService:
                         API_BASE_URL,
                         params=params,
                         headers=API_HEADERS,
-                        timeout=45  # Reasonable timeout per page
+                        timeout=45
                     )
-                    response. raise_for_status()
+                    response.raise_for_status()
                     payload = response.json() or {}
                     items = payload.get("Data", [])
                     page_fetched = True
@@ -591,18 +568,18 @@ class FirestoreProductService:
                         time.sleep(retry_delay)
                         continue
                     else:
-                        print(f"❌ Không thể fetch trang {page_index} sau {max_retries} lần thử, bỏ qua trang này")
+                        print(f"❌ Không thể fetch trang {page_index} sau {max_retries} lần thử")
                         items = []
                         page_fetched = True
                         break
 
-                except requests.exceptions. RequestException as e:
+                except requests.exceptions.RequestException as e:
                     print(f"⚠️ Lỗi khi fetch trang {page_index} (lần {attempt + 1}/{max_retries}): {e}")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay)
                         continue
                     else:
-                        print(f"❌ Không thể fetch trang {page_index} sau {max_retries} lần thử, bỏ qua trang này")
+                        print(f"❌ Không thể fetch trang {page_index} sau {max_retries} lần thử")
                         items = []
                         page_fetched = True
                         break
@@ -623,11 +600,9 @@ class FirestoreProductService:
 
             if not unique_items:
                 duplicate_pages += 1
-                print(
-                    f"  Trang {page_index} chỉ chứa sản phẩm trùng Id đã nhận ({duplicate_pages}/{MAX_DUPLICATE_PAGES})."
-                )
+                print(f"  Trang {page_index} chỉ chứa sản phẩm trùng ({duplicate_pages}/{MAX_DUPLICATE_PAGES}).")
                 if duplicate_pages >= MAX_DUPLICATE_PAGES:
-                    print("  Đã gặp quá nhiều trang trùng lặp liên tiếp, dừng phân trang.")
+                    print("  Đã gặp quá nhiều trang trùng lặp, dừng phân trang.")
                     break
                 page_index += 1
                 continue
@@ -638,16 +613,14 @@ class FirestoreProductService:
                 batch_products = [Product.from_dict(item) for item in unique_items]
             except KeyError as exc:
                 missing_key = str(exc)
-                print(f"Thiếu khóa {missing_key} trong dữ liệu sản phẩm trang {page_index}, bỏ qua trang này")
+                print(f"Thiếu khóa {missing_key} trong dữ liệu trang {page_index}, bỏ qua")
                 page_index += 1
                 continue
 
             products.extend(batch_products)
             total_returned += len(batch_products)
 
-            print(
-                f"  Đã nhận {len(batch_products)} sản phẩm mới ở trang {page_index} (tổng duy nhất {total_returned})."
-            )
+            print(f"  Đã nhận {len(batch_products)} sản phẩm mới ở trang {page_index} (tổng {total_returned}).")
 
             if len(items) < API_PAGE_SIZE:
                 break
@@ -657,50 +630,47 @@ class FirestoreProductService:
         print(f"Đã nhận tổng cộng {len(products)} sản phẩm từ API (phân trang).")
         return products
     
-    def update_changed_items(self,api_items, firestore_items):
-       changed_items = []
-       deleted_items = []
+    def update_changed_items(self, api_items, firestore_items):
+        changed_items = []
+        deleted_items = []
     
-       for item in api_items:
-           item_id = item. Id
-           if not item_id:
-               continue
+        for item in api_items:
+            item_id = item.Id
+            if not item_id:
+                continue
             
-           if getattr(item, 'isDeleted', False):
-               deleted_items.append(item_id)
-               continue
+            if getattr(item, 'isDeleted', False):
+                deleted_items.append(item_id)
+                continue
             
-           # Convert Product object to dict for hashing and saving
-           item_dict = item.__dict__
-           new_hash = self.hash_item(item_dict)
-           old_hash = firestore_items.get(item_id, {}).get('hash')
+            item_dict = item.__dict__
+            new_hash = self.hash_item(item_dict)
+            old_hash = firestore_items.get(item_id, {}).get('hash')
     
-           if new_hash != old_hash:
-               changed_items.append(item_dict)
+            if new_hash != old_hash:
+                changed_items.append(item_dict)
     
-       print(f"Phát hiện {len(changed_items)} sản phẩm thay đổi.  Đang cập nhật...")
-       print(f"Phát hiện {len(deleted_items)} sản phẩm cần xóa khỏi Firestore.")
+        print(f"Phát hiện {len(changed_items)} sản phẩm thay đổi. Đang cập nhật...")
+        print(f"Phát hiện {len(deleted_items)} sản phẩm cần xóa khỏi Firestore.")
     
-       # Ghi theo batch (500 item mỗi batch)
-       BATCH_SIZE = 500
-       for i in range(0, len(changed_items), BATCH_SIZE):
-           batch = db.batch()
-           for item in changed_items[i:i + BATCH_SIZE]:
-               doc_ref = db.collection(COLLECTION_NAME).document(str(item['Id']))
-               batch.set(doc_ref, item, merge=True)
-           batch. commit()
-           print(f"Đã cập nhật batch {i // BATCH_SIZE + 1}")
+        BATCH_SIZE = 500
+        for i in range(0, len(changed_items), BATCH_SIZE):
+            batch = db.batch()
+            for item in changed_items[i:i + BATCH_SIZE]:
+                doc_ref = self.products_ref.document(str(item['Id']))
+                batch.set(doc_ref, item, merge=True)
+            batch.commit()
+            print(f"Đã cập nhật batch {i // BATCH_SIZE + 1}")
     
-       # Xóa theo batch (500 item mỗi batch)
-       for i in range(0, len(deleted_items), BATCH_SIZE):
-           batch = db.batch()
-           for item_id in deleted_items[i:i + BATCH_SIZE]:
-               doc_ref = db.collection(COLLECTION_NAME). document(str(item_id))
-               batch.delete(doc_ref)
-           batch.commit()
-           print(f"Đã xóa batch {i // BATCH_SIZE + 1}")
+        for i in range(0, len(deleted_items), BATCH_SIZE):
+            batch = db.batch()
+            for item_id in deleted_items[i:i + BATCH_SIZE]:
+                doc_ref = self.products_ref.document(str(item_id))
+                batch.delete(doc_ref)
+            batch.commit()
+            print(f"Đã xóa batch {i // BATCH_SIZE + 1}")
     
-       print("Đã hoàn tất cập nhật và xóa.")
+        print("Đã hoàn tất cập nhật và xóa.")
 
     def hash_item(self, item):
         def default_serializer(obj):
@@ -708,10 +678,11 @@ class FirestoreProductService:
                 return obj.isoformat()
             raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
         item_copy = dict(item)
-        item_copy. pop("SyncChecksum", None)
-        item_copy.pop("SyncTimestamp", None)  # Exclude SyncTimestamp from hash
+        item_copy.pop("SyncChecksum", None)
+        item_copy.pop("SyncTimestamp", None)
         return hashlib.md5(json.dumps(item_copy, sort_keys=True, default=default_serializer).encode()).hexdigest()
 
+    @staticmethod
     def is_newer(api_mod, fs_mod):
         try:
             if not api_mod:
@@ -723,10 +694,8 @@ class FirestoreProductService:
             return False
 
     def read_all_products_fresh(self, include_inactive: bool = False, include_deleted: bool = False):
-        """
-        ✅ NEW: Đọc TẤT CẢ products trực tiếp từ Firestore, KHÔNG dùng cache.  
-        """
-        print(f"🔄 read_all_products_fresh called (include_inactive={include_inactive}, include_deleted={include_deleted})")
+        """Đọc TẤT CẢ products trực tiếp từ Firestore, KHÔNG dùng cache."""
+        print(f"🔄 read_all_products_fresh (include_inactive={include_inactive}, include_deleted={include_deleted})")
 
         docs = self.products_ref.stream()
         result = []
@@ -734,11 +703,9 @@ class FirestoreProductService:
         for doc in docs:
             data = doc.to_dict() or {}
 
-            # Determine item flags
             is_active = self._coerce_bool(data.get("isActive"), True)
-            is_deleted = self._coerce_bool(data. get("isDeleted"), False)
+            is_deleted = self._coerce_bool(data.get("isDeleted"), False)
 
-            # Apply filters based on function args
             if (not include_inactive) and (not is_active):
                 continue
             if (not include_deleted) and is_deleted:
@@ -748,7 +715,6 @@ class FirestoreProductService:
 
         print(f"✅ Fetched {len(result)} products from Firestore (fresh)")
         return result
-
 
     def invalidate_all_product_caches(self):
         """Invalidate tất cả các cache keys liên quan đến products"""

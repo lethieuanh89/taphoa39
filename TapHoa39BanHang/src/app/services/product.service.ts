@@ -218,7 +218,7 @@ export class ProductService {
           console.log(`✅ Đã tạo object store 'outofstock' thành công`);
         }
 
-        
+
       };
 
       // Try opening with the configured version first
@@ -2932,9 +2932,9 @@ export class ProductService {
       })
     );
   }
-async addProduct(product: Product): Promise<any> {
+  async addProduct(product: Product): Promise<any> {
     const url = `${environment.domainUrl}/api/firebase/add/product`;
-    return firstValueFrom(this. http.post(url, product));
+    return firstValueFrom(this.http.post(url, product));
   }
 
   /**
@@ -2948,9 +2948,9 @@ async addProduct(product: Product): Promise<any> {
   /**
    * Get all products from Firebase
    */
-  async getProducts(options?: { 
-    includeInactive?: boolean; 
-    includeDeleted?: boolean 
+  async getProducts(options?: {
+    includeInactive?: boolean;
+    includeDeleted?: boolean
   }): Promise<Product[]> {
     const params = new URLSearchParams();
     if (options?.includeInactive) {
@@ -2959,9 +2959,9 @@ async addProduct(product: Product): Promise<any> {
     if (options?.includeDeleted) {
       params.append('include_deleted', 'true');
     }
-    
+
     const url = `${environment.domainUrl}/api/firebase/get/products? ${params.toString()}`;
-    return firstValueFrom(this. http.get<Product[]>(url));
+    return firstValueFrom(this.http.get<Product[]>(url));
   }
 
   /**
@@ -2969,7 +2969,7 @@ async addProduct(product: Product): Promise<any> {
    */
   async updateProducts(products: Partial<Product>[]): Promise<any> {
     const url = `${environment.domainUrl}/api/firebase/update/products`;
-    return firstValueFrom(this. http.put(url, products));
+    return firstValueFrom(this.http.put(url, products));
   }
 
   /**
@@ -2979,7 +2979,12 @@ async addProduct(product: Product): Promise<any> {
     const url = `${environment.domainUrl}/api/firebase/products/del/${productId}`;
     return firstValueFrom(this.http.delete(url));
   }
-
+  async addProductToIndexedDB(product: Product): Promise<void> {
+    await this.ensureDBInitialized();
+    const sanitized = this.sanitizeProductForStorage({ ...product });
+    await this.indexedDBService.put(this.dbName, this.dbVersion, this.storeName, sanitized);
+    this.invalidateIndexedDbCache();
+  }
   // WebSocket control methods removed — client no longer manages a socket connection.
   // If you were calling `disconnectProductSocket()` or checking socket status, prefer
   // to stop relying on socket state; use `fetchProductsByIds` / `fetchLatestProducts` instead.

@@ -134,7 +134,7 @@ export class InputProductDialogComponent implements OnInit {
    * Generate unique product ID using current timestamp (seconds)
    */
   private generateProductId(): number {
-    return Math.floor(Date.now() / 1000);
+    return Math.floor(Date. now() / 1000);
   }
 
   /**
@@ -144,7 +144,7 @@ export class InputProductDialogComponent implements OnInit {
     if (!str) return '';
     return str
       .normalize('NFD')
-      . replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/đ/g, 'd')
       .replace(/Đ/g, 'D')
       .toUpperCase()
@@ -176,7 +176,7 @@ export class InputProductDialogComponent implements OnInit {
     }
 
     // Collect all units (base + others)
-    const allUnits = this. productUnits;
+    const allUnits = this.productUnits;
 
     // Collect all attribute combinations
     const attributeCombinations = this. generateAttributeCombinations();
@@ -184,10 +184,10 @@ export class InputProductDialogComponent implements OnInit {
     let productIndex = 0;
 
     // If no attributes, just create products for each unit
-    if (attributeCombinations. length === 0) {
+    if (attributeCombinations.length === 0) {
       for (const unit of allUnits) {
         const productId = baseId + productIndex;
-        const masterId = unit.isBase ? null : baseId; // Base unit has no master
+        const masterId = unit.isBase ? null : baseId;
 
         const product = this.createProductObject({
           id: productId,
@@ -207,17 +207,14 @@ export class InputProductDialogComponent implements OnInit {
         for (const unit of allUnits) {
           const productId = baseId + productIndex;
           
-          // Determine master relationships
           let masterUnitId: number | null = null;
           let masterProductId: number | null = null;
 
           if (! unit.isBase) {
-            // Non-base unit: MasterUnitId = base product Id
             masterUnitId = baseId;
           }
 
           if (attrCombo.length > 0) {
-            // Has attributes: MasterProductId = base product Id
             masterProductId = baseId;
           }
 
@@ -230,7 +227,7 @@ export class InputProductDialogComponent implements OnInit {
             now: now
           });
 
-          generatedProducts.push(product);
+          generatedProducts. push(product);
           productIndex++;
         }
       }
@@ -242,8 +239,6 @@ export class InputProductDialogComponent implements OnInit {
 
   /**
    * Generate all combinations of attribute values
-   * Example: [{name: 'Color', values: ['Red', 'Blue']}, {name: 'Size', values: ['S', 'M']}]
-   * Returns: [['Red', 'S'], ['Red', 'M'], ['Blue', 'S'], ['Blue', 'M']]
    */
   private generateAttributeCombinations(): string[][] {
     if (this.productAttributes.length === 0) {
@@ -255,7 +250,6 @@ export class InputProductDialogComponent implements OnInit {
       return [];
     }
 
-    // Cartesian product of all attribute values
     let combinations: string[][] = [[]];
 
     for (const attr of attributes) {
@@ -309,7 +303,7 @@ export class InputProductDialogComponent implements OnInit {
         if (attributeValues[index]) {
           productAttributes.push({
             AttributeName: attr.name,
-            AttributeValue: attributeValues[index]
+            Value: attributeValues[index]
           });
         }
       });
@@ -325,8 +319,8 @@ export class InputProductDialogComponent implements OnInit {
       isDeleted: false,
       Cost: this.product.cost || 0,
       BasePrice: unit.price || this.product.price || 0,
-      OnHand: this.product.stock || 0,
-      OnHandNV: 0,
+      OnHand: this.product.stock || 0, // ✅ User nhập tồn kho -> Backend sẽ chuyển sang OnHandNV
+      OnHandNV: 0, // ✅ Sẽ được set bởi backend
       Unit: unit.name,
       MasterUnitId: masterId,
       MasterProductId: masterProductId,
@@ -334,7 +328,7 @@ export class InputProductDialogComponent implements OnInit {
       Description: this.product.description || '',
       IsRewardPoint: false,
       ModifiedDate: now,
-      Image: this. imageDataUrl,
+      Image: this.imageDataUrl,
       CreatedDate: now,
       ProductAttributes: productAttributes,
       NormalizedName: this. normalizeString(fullName),
@@ -348,28 +342,59 @@ export class InputProductDialogComponent implements OnInit {
     if (! input.files || input.files.length === 0) return;
     const file = input.files[0];
     const reader = new FileReader();
-    reader.onload = () => {
-      this.imageDataUrl = reader. result as string;
+    reader. onload = () => {
+      this.imageDataUrl = reader.result as string;
     };
     reader. readAsDataURL(file);
   }
 
+  /**
+   * ✅ FIXED: Chỉ lưu vào Firebase và IndexedDB, KHÔNG trigger sync từ KiotViet
+   */
   async save() {
     try {
-      this.saving = true;
+      this. saving = true;
 
       // Generate all product variants
       const products = this.generateAllProducts();
 
-      // Call backend to save all products
-      const result = await this.productService.addProducts(products);
+      console.log(`📦 Saving ${products.length} products to Firebase...`);
 
-      console.log('✅ Products saved:', result);
+      // ✅ Step 1: Lưu vào Firebase qua API /api/firebase/add/products/batch
+      // Backend sẽ tự động chuyển OnHand -> OnHandNV
+      const result = await this. productService.addProducts(products);
 
+      if (result.status === 'error') {
+        throw new Error(result.message || 'Lỗi khi lưu sản phẩm');
+      }
+
+      console.log('✅ Firebase saved:', result);
+
+      // ✅ Step 2: Lưu vào IndexedDB local
+      try {
+        for (const product of products) {
+          // Chuyển OnHand sang OnHandNV trước khi lưu vào IndexedDB
+          const productForIndexedDB = {
+            ...product,
+            OnHandNV: product. OnHand, // Tồn kho user nhập
+            OnHand: 0 // Tồn kho thực tế = 0 (chưa có trên KiotViet)
+          };
+          await this.productService.addProductToIndexedDB(productForIndexedDB);
+        }
+        console.log(`✅ IndexedDB saved: ${products.length} products`);
+      } catch (dbError) {
+        console.warn('⚠️ Lỗi khi lưu vào IndexedDB:', dbError);
+        // Không throw error, vì đã lưu thành công vào Firebase
+      }
+
+      // ✅ Step 3: Đóng dialog với kết quả - KHÔNG trigger sync
       this.dialogRef.close({ 
         saved: true, 
         products: products,
-        result: result 
+        count: products.length,
+        result: result,
+        // ✅ Flag để component cha biết không cần sync
+        skipSync: true 
       });
 
     } catch (error: any) {
@@ -382,7 +407,7 @@ export class InputProductDialogComponent implements OnInit {
 
   // Open base unit dialog
   openAddBaseUnit() {
-    const dialogRef = this.dialog. open(BaseUnitDialogComponent, {
+    const dialogRef = this.dialog.open(BaseUnitDialogComponent, {
       width: '450px',
       minHeight: '300px',
       maxHeight: '90vh',
@@ -402,7 +427,7 @@ export class InputProductDialogComponent implements OnInit {
   }
 
   openAddUnit() {
-    const base = this.productUnits. find(u => u.isBase);
+    const base = this.productUnits.find(u => u.isBase);
     if (! base) return;
     const dialogRef = this. dialog.open(UnitDialogComponent, {
       width: '500px',
@@ -416,7 +441,7 @@ export class InputProductDialogComponent implements OnInit {
         const unit: ProductUnit = { 
           name: res.name, 
           conversion: Number(res.conversion || 1), 
-          price: Number(res. price || base.price),
+          price: Number(res.price || base.price),
           isBase: false
         };
         this.productUnits.push(unit);
@@ -430,7 +455,7 @@ export class InputProductDialogComponent implements OnInit {
 
   removeUnit(index: number) {
     if (index < 0 || index >= this.productUnits.length) return;
-    this.productUnits. splice(index, 1);
+    this. productUnits.splice(index, 1);
   }
 
   openAddAttribute() {
