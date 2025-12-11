@@ -28,13 +28,13 @@
 
     <!-- Code (Editable, Sticky) -->
     <div class="code-cell sticky-column">
-      <input type="text" class="cell-input" [(ngModel)]="product.Code" (blur)="onCodeChange($event)"
+      <input type="text" class="cell-input" [(ngModel)]="product.Code" (input)="onCodeChange($event)"
         [matTooltip]="product.Code" tabindex="1" />
     </div>
 
     <!-- Name (Editable, Sticky) -->
     <div class="name-cell sticky-column">
-      <input type="text" class="cell-input name-input" [(ngModel)]="product.Name" (blur)="onNameChange($event)"
+      <input type="text" class="cell-input name-input" [(ngModel)]="product.Name" (input)="onNameChange($event)"
         [matTooltip]="product.FullName" tabindex="1" />
     </div>
 

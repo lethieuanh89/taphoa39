@@ -132,39 +132,21 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
 
   onCodeChange(event: any) {
     const newCode = event.target.value.trim();
-    if (newCode && newCode !== this.product.Code) {
-      const oldCode = this.product.Code;
+    this.product.Code = newCode;
+    this.product.Edited = true;
+    this.saveToLocalStorage();
+    this.emitProductChange();
 
-      if (!(this.product as any).OriginalCode) {
-        (this.product as any).OriginalCode = oldCode;
-      }
-
-      this.product.Code = newCode;
-      this.product.Edited = true;
-
-      this.emitProductChange();
-    }
   }
 
   onNameChange(event: any) {
     const newName = event.target.value.trim();
-    const hasOriginalName = !!(this.product as any).OriginalName;
-    const oldName = hasOriginalName ? (this.product as any).OriginalName : this.product.Name;
 
-    const nameChanged = hasOriginalName
-      ? (newName !== oldName)
-      : (newName && newName !== oldName);
+    this.product.Name = newName;
+    this.product.Edited = true;
+    this.saveToLocalStorage();
+    this.emitProductChange();
 
-    if (nameChanged) {
-      if (!hasOriginalName) {
-        (this.product as any).OriginalName = oldName;
-      }
-
-      this.product.Name = newName;
-      this.product.Edited = true;
-
-      this.emitProductChange();
-    }
   }
 
   onBasePriceChange(event: any) {
@@ -394,8 +376,8 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
           if (discountOnTotal > 0) {
             this.product.Cost = ((totalPrice - discountOnTotal) / totalUnits) * conversionValue || 0;
           }
-           if (discountOnMaster > 0) {
-            this.product.Cost = ((totalPrice-(discountOnMaster*totalUnits))/totalUnits)* conversionValue || 0;
+          if (discountOnMaster > 0) {
+            this.product.Cost = ((totalPrice - (discountOnMaster * totalUnits)) / totalUnits) * conversionValue || 0;
           }
         } else {
           this.product.Cost = 0;
