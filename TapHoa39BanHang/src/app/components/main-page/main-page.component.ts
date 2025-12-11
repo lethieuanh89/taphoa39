@@ -82,6 +82,7 @@ import { InvoiceTabsComponent } from './invoice-tabs/invoice-tabs.component';
 import { MenuBarComponent } from './menu-bar/menu-bar.component';
 import { CartItemsComponent } from './cart-items/cart-items.component';
 import { CustomerSearchComponent } from './customer-search/customer-search.component';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'main-page',
@@ -154,9 +155,13 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
     private productCache: ProductCacheService,
     private customerValidation: CustomerValidationService,
     private invoiceContext: InvoiceContextService,
-    private uiNotification: UINotificationService
+    private uiNotification: UINotificationService,
+    private authService: AuthService
   ) {
     // this.addInvoiceTab();
+    this.authService.authState$.subscribe(state => {
+      this.currentUserEmail = state.user?.email || '';
+    });
   }
 
   searchTerm = '';
@@ -195,6 +200,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
   readonly DEFAULT_INVOICE_VAT = 1.08;
   invoiceVatPercent = 8;
   showVatDetails = false;
+  currentUserEmail: string = '';
 
   @ViewChild(InvoiceDetailComponent, { static: false })
   invoiceDetailComponent!: InvoiceDetailComponent;
@@ -3250,7 +3256,7 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       this.formattedCustomerPaid = '0';
       this.invoiceNote = '';
 
-    
+
     } catch (error) {
       console.error('❌ Error saving edited order:', error);
       alert('Lỗi khi lưu chỉnh sửa đơn hàng!');
@@ -3362,4 +3368,5 @@ export class MainPageComponent implements OnInit, OnDestroy, DoCheck, AfterViewI
       });
     }
   }
+
 }

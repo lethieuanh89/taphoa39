@@ -1,75 +1,49 @@
 <h1 mat-dialog-title class="dialog-title">Những mặt hàng đã được thay đổi</h1>
-<div mat-dialog-content>
-  <div style="max-height: 500px; overflow: auto;">
-    <table mat-table [dataSource]="filteredProducts" class="mat-elevation-z8" style="min-width: 100%;">
-      <ng-container matColumnDef="Image">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2;"> Hình ảnh </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element">
-          <img [src]="element.Image" alt="Product Image" width="35" height="55">
-        </td>
-      </ng-container>
+<div mat-dialog-content class="dialog-content">
+  <!-- Header Row (Flexbox like edit-product-page-refactored) -->
+  <div class="table-header">
+    <div class="header-cell expand-col"></div>
+    <div class="header-cell checkbox-col" title="Tính trung bình">TB</div>
+    <div class="header-cell image-col">Ảnh</div>
+    <div class="header-cell code-col sticky-header-col">Mã hàng</div>
+    <div class="header-cell name-col sticky-header-col">Tên hàng</div>
+    <div class="header-cell price-col" title="Giá bán mới">Giá bán</div>
+    <div class="header-cell cost-col" title="Giá vốn mới">Giá vốn</div>
+    <div class="header-cell onhand-col">Tồn kho</div>
+    <div class="header-cell unit-col">Đơn vị</div>
+    <div class="header-cell box-col">SL</div>
+    <div class="header-cell retail-col">Lẻ</div>
+    <div class="header-cell discount-col" title="Chiết khấu / sản phẩm">CK/SP</div>
+    <div class="header-cell discount2-col" title="Chiết khấu / tổng tiền">CK/TT</div>
+    <div class="header-cell totalprice-col">Thành tiền</div>
+  </div>
 
-      <ng-container matColumnDef="Code">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2;"> Mã hàng </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element"> {{element.Code}} 
-          <span *ngIf="element.Master===true" style="color: red;font-size: 20px;">*</span>
-        </td>
-      </ng-container>
+  <!-- Products Container with Virtual Scrolling -->
+  <cdk-virtual-scroll-viewport class="products-viewport" [itemSize]="50" [minBufferPx]="500" [maxBufferPx]="1000">
+    <ng-container *cdkVirtualFor="let group of productGroups; trackBy: trackByGroup">
+      <app-product-row
+        [product]="group.master"
+        [childProducts]="group.children"
+        [productColor]="getProductColor(group.master.Id)">
+      </app-product-row>
+    </ng-container>
+  </cdk-virtual-scroll-viewport>
 
-      <ng-container matColumnDef="FullName">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2;"> Tên hàng </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element">
-          {{element.FullName}}
-          <span *ngIf="element.Master===true" style="color: red;font-size: 20px;">*</span>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="BasePrice">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2; text-align: center;"> Giá bán mới </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element" [ngClass]="getBasePriceClassHighlight(element.BasePrice, element.OldBasePrice,element.Master)"
-          style="text-align: right;padding: 5px;"> {{element.BasePrice| number:'1.0-0'}}
-          <mat-icon *ngIf="element.BasePrice > element.OldBasePrice"
-            style="vertical-align: middle; color: rgb(0, 34, 128);margin-bottom:15px">arrow_drop_up</mat-icon>
-          <mat-icon *ngIf="element.BasePrice < element.OldBasePrice"
-            style="vertical-align: middle; color: red;margin-bottom:15px">arrow_drop_down</mat-icon>
-          <span *ngIf="element.BasePrice !== element.OldBasePrice" style="margin-left: -20px; font-size: 7px">{{
-            (element.BasePrice - element.OldBasePrice) | number:'1.0-0' }}</span>
-        </td>
-      </ng-container>
-      <ng-container matColumnDef="OldBasePrice">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2; text-align: center;"> Giá bán cũ </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element" style="text-align: right;"> {{element.OldBasePrice| number:'1.0-0'}} </td>
-      </ng-container>
-
-      <ng-container matColumnDef="Cost">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2; text-align: center;"> Giá vốn mới </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element" [ngClass]="getCostClassHighlight(element.Cost, element.OldCost,element.Master)"
-          style="text-align: right;padding: 5px;">
-          {{ element.Cost | number:'1.0-0'}}
-          <mat-icon *ngIf="element.Cost > element.OldCost"
-            style="vertical-align: middle; color: red;margin-bottom:15px">arrow_drop_up</mat-icon>
-          <mat-icon *ngIf="element.Cost < element.OldCost"
-            style="vertical-align: middle; color: rgb(10, 68, 10);margin-bottom:15px">arrow_drop_down</mat-icon>
-          <span *ngIf="element.Cost !== element.OldCost" style="margin-left: -20px; font-size: 7px">{{ (element.Cost -
-            element.OldCost) | number:'1.0-0' }}</span>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="OldCost">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2; text-align: center;"> Giá vốn cũ </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element" style="text-align: right;"> {{element.OldCost| number:'1.0-0'}} </td>
-      </ng-container>
-
-      <ng-container matColumnDef="OnHand">
-        <th mat-header-cell *matHeaderCellDef style="position: sticky; top: 0; background: #fff; z-index: 2; text-align: center;"> Tồn kho </th>
-        <td [style.background-color]="getProductColor(element.ParentCode || element.Code)" mat-cell *matCellDef="let element" style="text-align: right;"> {{element.OnHand| number:'1.3-3'}} </td>
-      </ng-container>
-
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-    </table>
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="productGroups.length === 0">
+    <mat-icon class="empty-icon">info</mat-icon>
+    <h3>Không có sản phẩm nào được chỉnh sửa</h3>
+    <p>Vui lòng chỉnh sửa sản phẩm trước khi cập nhật</p>
   </div>
 </div>
-<div mat-dialog-actions>
-  <button mat-button class='send-data-to-kiotviet' (click)="sendDataClick()">Gửi Dữ liệu đến KiotViet</button>
+
+<div mat-dialog-actions class="dialog-actions">
+  <button mat-button class='send-data-to-kiotviet' (click)="sendDataClick()">
+    <mat-icon>cloud_upload</mat-icon>
+    Gửi Dữ liệu đến KiotViet
+  </button>
+  <button mat-button mat-dialog-close class="close-button">
+    <mat-icon>close</mat-icon>
+    Đóng
+  </button>
 </div>

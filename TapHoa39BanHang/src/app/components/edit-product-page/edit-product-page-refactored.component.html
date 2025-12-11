@@ -1,0 +1,72 @@
+<div class="search-header">
+    <!-- <button class="voice-icon" mat-icon-button matPrefix (click)="startVoiceInput()">🎤</button> -->
+    <div class="search-wrapper">
+    
+      <input type="text" class="search-bar" matInput [formControl]="searchControl"
+        placeholder="Tìm kiếm: nhập mã hàng hoặc tên hàng và gõ Enter..." (keyup.enter)="onSearch($event)" />
+    </div>
+  
+
+  <mat-toolbar class="toolbar">
+    <button mat-button class="update-button" (click)="onUpdate()">
+      <mat-icon>save</mat-icon>
+      Cập nhật
+    </button>
+    <button mat-button class="add-product-button" (click)="addProduct()">
+      <mat-icon>add_shopping_cart</mat-icon>
+      Thêm hàng hóa
+    </button>
+    <button mat-button class="clear-cache-button" (click)="clearAllCache()" matTooltip="Xóa toàn bộ dữ liệu tạm">
+      <mat-icon>delete_sweep</mat-icon>
+      Xóa cache
+    </button>
+  </mat-toolbar>
+
+  <div *ngIf="showOfflineHint" class="sync-hint">
+    <span class="sync-dot"></span>
+    <span>{{ hintMessage }}</span>
+  </div>
+</div>
+
+<div *ngIf="isLoading" class="loading-overlay">
+  <div class="spinner"></div>
+  <p>Đang tải dữ liệu...</p>
+</div>
+
+<!-- Main Product Table -->
+<div class="products-container">
+  <!-- Sticky Header -->
+  <div class="table-header">
+    <div class="header-cell expand-col"></div>
+    <div class="header-cell checkbox-col" title="Tính trung bình">TB</div>
+    <div class="header-cell image-col">Ảnh</div>
+    <div class="header-cell code-col">Mã hàng</div>
+    <div class="header-cell name-col">Tên hàng</div>
+    <div class="header-cell price-col" title="Giá bán đề xuất">Giá bán</div>
+    <div class="header-cell cost-col">Giá vốn</div>
+    <div class="header-cell onhand-col">Tồn kho</div>
+    <div class="header-cell unit-col">Đơn vị</div>
+    <div class="header-cell box-col">Thùng</div>
+    <div class="header-cell retail-col">Lẻ</div>
+    <div class="header-cell discount-col" title="Chiết khấu / sản phẩm">Chiết khấu/<br>Sản phẩm</div>
+    <div class="header-cell discount2-col" title="Chiết khấu / tổng tiền">Chiết khấu/<br>Tổng tiền</div>
+    <div class="header-cell totalprice-col">Thành tiền</div>
+  </div>
+
+  <!-- Product Rows with Virtual Scrolling -->
+  <cdk-virtual-scroll-viewport class="products-viewport" [itemSize]="50" [minBufferPx]="500" [maxBufferPx]="1000">
+    <ng-container *cdkVirtualFor="let group of productGroups; trackBy: trackByGroup">
+      <app-product-row [product]="group.master" [childProducts]="group.children"
+        [productColor]="getProductColor(group.master.Id)"
+        (productChange)="onProductChange($event, productGroups.indexOf(group))"
+        (childrenChange)="onChildrenChange($event, productGroups.indexOf(group))"></app-product-row>
+    </ng-container>
+  </cdk-virtual-scroll-viewport>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="!isLoading && productGroups.length === 0">
+    <mat-icon class="empty-icon">search_off</mat-icon>
+    <h3>Không tìm thấy sản phẩm</h3>
+    <p>Vui lòng nhập mã hàng hoặc tên hàng để tìm kiếm</p>
+  </div>
+</div>

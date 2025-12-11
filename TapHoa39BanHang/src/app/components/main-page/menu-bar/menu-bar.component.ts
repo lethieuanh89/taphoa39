@@ -16,6 +16,7 @@ export class MenuBarComponent {
   @Input() isOrderMode: boolean = false;
   @Input() isPrintEnabled: boolean = false;
   @Input() showMenuDropdown: boolean = false;
+  @Input() userEmail: string = '';
 
   @Output() offlineInvoicesClick = new EventEmitter<void>();
   @Output() reloadClick = new EventEmitter<void>();
@@ -24,6 +25,15 @@ export class MenuBarComponent {
   @Output() outOfStockClick = new EventEmitter<void>();
   @Output() menuClick = new EventEmitter<string>();
   @Output() menuDropdownStateChange = new EventEmitter<boolean>();
+
+  /**
+   * Get display name from email (remove @gmail.com or any domain)
+   */
+  get displayName(): string {
+    if (! this.userEmail) return 'admin';
+    const atIndex = this.userEmail.indexOf('@');
+    return atIndex > 0 ? this. userEmail.substring(0, atIndex) : this.userEmail;
+  }
 
   openOfflineInvoicesDialog() {
     this.offlineInvoicesClick.emit();
@@ -42,11 +52,11 @@ export class MenuBarComponent {
   }
 
   openOutOfStockDialog() {
-    this.outOfStockClick.emit();
+    this. outOfStockClick.emit();
   }
 
   onMenuClick(menu: string) {
-    this.menuClick.emit(menu);
+    this. menuClick.emit(menu);
   }
 
   openExternalLink(url: string) {
@@ -55,11 +65,11 @@ export class MenuBarComponent {
 
   showMenu() {
     this.showMenuDropdown = true;
-    this.menuDropdownStateChange.emit(true);
+    this.menuDropdownStateChange. emit(true);
   }
 
   hideMenu() {
     this.showMenuDropdown = false;
-    this.menuDropdownStateChange.emit(false);
+    this.menuDropdownStateChange. emit(false);
   }
 }

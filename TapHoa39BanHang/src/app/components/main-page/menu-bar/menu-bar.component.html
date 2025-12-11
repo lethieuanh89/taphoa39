@@ -13,7 +13,7 @@
 
   <i class="fa-solid fa-cart-plus toogle-print"
      (click)="enableOrderMode()"
-     [class.disabled]="!isOrderMode"
+     [class.disabled]="! isOrderMode"
      matTooltip="Bật tắt chế độ đặt hàng"></i>
 
   <i class="fa-solid fa-print toogle-print"
@@ -26,7 +26,9 @@
      (click)="openOutOfStockDialog()"
      matTooltip="Danh sách hết hàng tồn kho"></i>
 
-  <i class="admin" (mouseleave)="hideMenu()">admin</i>
+  <span class="admin" 
+        (mouseleave)="hideMenu()"
+        [matTooltip]="userEmail">{{ displayName }}</span>
 
   <i class="fa-solid fa-bars bar" (mouseenter)="showMenu()"></i>
 

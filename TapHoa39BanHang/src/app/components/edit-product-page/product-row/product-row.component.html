@@ -1,0 +1,129 @@
+<div class="product-row-container" [style.background-color]="darkerColor">
+  <!-- Master Row -->
+  <div class="master-row" [class.expanded]="expanded" (click)="onRowClick($event)">
+    <!-- Expand/Collapse Button -->
+    <div class="expand-cell">
+      <button class="expand-btn" *ngIf="childProducts && childProducts.length > 0"
+        [matTooltip]="expanded ? 'Thu gọn' : 'Mở rộng'" type="button">
+        <mat-icon>{{ expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+      <span class="child-count" *ngIf="childProducts && childProducts.length > 0">
+        {{ childProducts.length }}
+      </span>
+    </div>
+
+    <!-- AverageCheckPoint Checkbox -->
+    <div class="checkbox-cell">
+      <mat-checkbox [(ngModel)]="product.AverageCheckPoint" (change)="onAverageCheckPointChange()"
+        [matTooltip]="'Tính giá vốn trung bình'" color="primary">
+      </mat-checkbox>
+    </div>
+
+    <!-- Image -->
+    <div class="image-cell">
+      <div class="img-wrapper">
+        <img [src]="product.Image" [alt]="product.Name" class="product-img" />
+      </div>
+    </div>
+
+    <!-- Code (Editable, Sticky) -->
+    <div class="code-cell sticky-column">
+      <input type="text" class="cell-input" [(ngModel)]="product.Code" (blur)="onCodeChange($event)"
+        [matTooltip]="product.Code" tabindex="1" />
+    </div>
+
+    <!-- Name (Editable, Sticky) -->
+    <div class="name-cell sticky-column">
+      <input type="text" class="cell-input name-input" [(ngModel)]="product.Name" (blur)="onNameChange($event)"
+        [matTooltip]="product.FullName" tabindex="1" />
+    </div>
+
+    <!-- BasePrice (Suggested Price - Editable) -->
+    <div class="price-cell">
+      <div class="value-with-diff">
+        <input type="text" class="cell-input numeric-input" #basePriceInput
+          [value]="formatNumber(product.BasePrice || 0)" (input)="onBasePriceChange($event)" (blur)="onBasePriceBlur()"
+          (keydown)="validateNumber($event)" placeholder="0" tabindex="1" />
+        <span class="diff-indicator" *ngIf="product.Edited && !isUnchanged(getBasePriceDiff())"
+          [class.diff-increase]="isIncrease(getBasePriceDiff())" [class.diff-decrease]="isDecrease(getBasePriceDiff())">
+          <mat-icon class="diff-arrow">{{ isIncrease(getBasePriceDiff()) ? 'arrow_upward' : 'arrow_downward'
+            }}</mat-icon>
+          <span class="diff-value">{{ formatNumber(Math.abs(getBasePriceDiff())) }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Cost (Read Only) -->
+    <div class="cost-cell">
+      <div class="value-with-diff">
+        <span class="readonly-value" #costDisplay>{{ formatNumber(product.Cost) }}</span>
+        <span class="diff-indicator" *ngIf="product.Edited && !isUnchanged(getCostDiff())"
+          [class.diff-increase]="isIncrease(getCostDiff())" [class.diff-decrease]="isDecrease(getCostDiff())">
+          <mat-icon class="diff-arrow">{{ isIncrease(getCostDiff()) ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+          <span class="diff-value">{{ formatNumber(Math.abs(getCostDiff())) }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- OnHand (Inventory - Read Only) -->
+    <div class="onhand-cell">
+      <div class="value-with-diff">
+        <span class="readonly-value">{{ product.OnHand | number:'1.3-3' }}</span>
+        <span class="diff-indicator" *ngIf="product.Edited && !isUnchanged(getOnHandDiff())"
+          [class.diff-increase]="isIncrease(getOnHandDiff())" [class.diff-decrease]="isDecrease(getOnHandDiff())">
+          <mat-icon class="diff-arrow">{{ isIncrease(getOnHandDiff()) ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+          <span class="diff-value">{{ (Math.abs(getOnHandDiff()) | number:'1.3-3') }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Unit (Read Only) -->
+    <div class="unit-cell">
+      <span class="readonly-value">{{ product.Unit }}</span>
+    </div>
+
+    <!-- Box (Editable) -->
+    <div class="box-cell">
+      <input type="text" class="cell-input numeric-input" [value]="product.Retail? formatNumber(product.Box) : ''"
+        (input)="onBoxChange($event)" (blur)="onBoxBlur($event)" (keydown)="validateNumber($event)" placeholder="0"
+        tabindex="1" />
+    </div>
+
+    <!-- Retail (Editable) -->
+    <div class="retail-cell">
+      <input type="text" class="cell-input numeric-input" [value]="product.Retail? formatNumber(product.Retail) : ''"
+        (input)="onRetailChange($event)" (blur)="onRetailBlur($event)" (keydown)="validateNumber($event)"
+        placeholder="0" tabindex="1" />
+    </div>
+
+    <!-- Discount per product (Editable) -->
+    <div class="discount-cell">
+      <input type="text" class="cell-input numeric-input"
+        [value]="product.Discount ? formatNumber(product.Discount) : ''" (input)="onDiscountChange($event)"
+        (blur)="onDiscountBlur($event)" (keydown)="validateNumber($event)" placeholder="0" tabindex="1" />
+    </div>
+
+    <!-- Discount on total (Editable) -->
+    <div class="discount2-cell">
+      <input type="text" class="cell-input numeric-input"
+        [value]="product.Discount2 ? formatNumber(product.Discount2) : ''" (input)="onDiscount2Change($event)"
+        (blur)="onDiscount2Blur($event)" (keydown)="validateNumber($event)" placeholder="0" tabindex="1" />
+    </div>
+
+    <!-- Total Price (Editable, Space = Popup) -->
+    <div class="totalprice-cell">
+      <input type="text" class="cell-input numeric-input total-input"
+        [value]="product.TotalPrice ? formatNumber(product.TotalPrice) : ''" (input)="onTotalPriceChange($event)"
+        (blur)="onTotalPriceBlur($event)" (keydown)="onTotalPriceKeydown($event)" placeholder="0 (Space = Calc)"
+        matTooltip="Nhấn Space để mở popup tính toán" tabindex="1" />
+    </div>
+  </div>
+
+  <!-- Children Units (Collapsed) -->
+  <div class="children-container" *ngIf="expanded && childProducts && childProducts.length > 0"
+    [style.background-color]="productColor">
+    <app-child-units-list [childProducts]="childProducts" [masterProduct]="product" [baseColor]="productColor"
+      (childEdit)="onChildEdit($event)">
+    </app-child-units-list>
+  </div>
+</div>
