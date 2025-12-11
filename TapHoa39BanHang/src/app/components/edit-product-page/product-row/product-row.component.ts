@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -25,7 +25,7 @@ import { validateNumber } from '../utility-functions/app.validate-number';
   templateUrl: './product-row.component.html',
   styleUrls: ['./product-row.component.css']
 })
-export class ProductRowComponent implements OnInit, AfterViewInit {
+export class ProductRowComponent implements OnInit, OnChanges, AfterViewInit {
   @Input() product!: EditedProduct;
   @Input() childProducts: EditedProduct[] = [];
   @Input() productColor: string = '#ffffff';
@@ -36,14 +36,12 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
   @ViewChild('basePriceInput') basePriceInput?: ElementRef<HTMLInputElement>;
   @ViewChild('costDisplay') costDisplay?: ElementRef<HTMLSpanElement>;
 
-
-
   expanded = false;
 
   // Expose Math for template
   Math = Math;
 
-  // Store original values from grouped_* localStorage
+  // Store original values from grouped_* localStorage or from product as loaded
   private originalBasePrice: number = 0;
   private originalCost: number = 0;
   private originalOnHand: number = 0;
@@ -57,8 +55,21 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
   ) { }
 
   ngOnInit() {
-    // Load original values from grouped_* localStorage
+    // Initial load (component creation)
     this.loadOriginalValues();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // IMPORTANT: ProductRow instances are reused by virtual scroll.
+    // When the @Input() product changes we MUST reload original values used for calculations.
+    if (changes['product'] && changes['product'].currentValue) {
+      // Update original values to match the newly bound product
+      this.loadOriginalValues();
+
+      // Force update of input fields and view so calculations use the correct originals
+      this.updateInputFields();
+      this.cdr.detectChanges();
+    }
   }
 
   ngAfterViewInit() {
@@ -66,16 +77,20 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
   }
 
   /**
-   * Load original product values from grouped_* localStorage
-   * These values are used for cost calculation (matching cost.service.ts logic)
+   * Load original product values for calculation.
+   * Called on component init AND every time @Input product changes (ngOnChanges).
    */
   private loadOriginalValues() {
-    this.originalBasePrice = this.parseNumber(this.product.BasePrice);
-    this.originalCost = this.parseNumber(this.product.Cost);
-    this.originalOnHand = this.parseNumber(this.product.OnHand);
+    // Use numeric-parsed values to avoid string issues
+    this.originalBasePrice = this.parseNumber(this.product?.BasePrice);
+    this.originalCost = this.parseNumber(this.product?.Cost);
+    this.originalOnHand = this.parseNumber(this.product?.OnHand);
+
+    // If product was just loaded and has no Edited flag, ensure Edited is boolean
+    if (this.product && typeof this.product.Edited === 'undefined') {
+      this.product.Edited = false;
+    }
   }
-
-
 
   /**
    * Parse number from various input formats
@@ -130,23 +145,37 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
     }
   }
 
-  onCodeChange(event: any) {
-    const newCode = event.target.value.trim();
+  /**
+   * onCodeChange: support both (event) and direct value:
+   * - If template uses (input) or (blur) => event object
+   * - If template uses (ngModelChange) => receives string value
+   *
+   * Because [(ngModel)] updates the model before blur/ngModelChange, we always persist.
+   */
+  onCodeChange(eventOrValue: any) {
+    const newCode = typeof eventOrValue === 'string'
+      ? eventOrValue.trim()
+      : (eventOrValue?.target?.value ?? '').toString().trim();
+
     this.product.Code = newCode;
     this.product.Edited = true;
     this.saveToLocalStorage();
     this.emitProductChange();
-
   }
 
-  onNameChange(event: any) {
-    const newName = event.target.value.trim();
+  /**
+   * onNameChange: support both (event) and direct value (ngModelChange)
+   */
+  onNameChange(eventOrValue: any) {
+    const newName = typeof eventOrValue === 'string'
+      ? eventOrValue.trim()
+      : (eventOrValue?.target?.value ?? '').toString().trim();
+
 
     this.product.Name = newName;
     this.product.Edited = true;
     this.saveToLocalStorage();
     this.emitProductChange();
-
   }
 
   onBasePriceChange(event: any) {
@@ -302,8 +331,12 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
       this.basePriceInput.nativeElement.value = this.formatNumber(this.product.BasePrice || 0);
     }
 
-    // Cost is read-only span, will update via change detection
-    // But force change detection to be sure
+    // Force cost display update if available
+    if (this.costDisplay?.nativeElement) {
+      this.costDisplay.nativeElement.textContent = this.formatNumber(this.product.Cost);
+    }
+
+    // Force change detection to update view
     this.cdr.detectChanges();
   }
 
@@ -332,9 +365,7 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
       box = this.parseNumber(this.product.Box)
     }
 
-
     const totalUnits = (box * largestConversion) + retail;
-    console.log(totalUnits)
     const addedOnHand = conversionValue > 0 ? totalUnits / conversionValue : 0;
 
     if (box === 0 && retail === 0 && totalPrice === 0) {
@@ -376,8 +407,8 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
           if (discountOnTotal > 0) {
             this.product.Cost = ((totalPrice - discountOnTotal) / totalUnits) * conversionValue || 0;
           }
-          if (discountOnMaster > 0) {
-            this.product.Cost = ((totalPrice - (discountOnMaster * totalUnits)) / totalUnits) * conversionValue || 0;
+           if (discountOnMaster > 0) {
+            this.product.Cost = ((totalPrice-(discountOnMaster*totalUnits))/totalUnits)* conversionValue || 0;
           }
         } else {
           this.product.Cost = 0;
@@ -395,7 +426,7 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
       // Update all children based on master changes
       this.updateChildrenByCost();
 
-      // Save to localStorage using product Id
+      // Save to localStorage using product Id (and Code fallback)
       this.saveToLocalStorage();
 
       this.emitProductChange();
@@ -406,11 +437,24 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
   }
 
   /**
-   * Save edited product to localStorage using product Id
+   * Save edited product to localStorage using product Id (and Code fallback)
    */
   private saveToLocalStorage() {
-    if (this.product.Id) {
-      localStorage.setItem(`editing_childProduct_${this.product.Id}`, JSON.stringify(this.product));
+    try {
+      const payload = { ...this.product };
+      const keyById = this.product.Id ? `editing_childProduct_${this.product.Id}` : null;
+      const keyByCode = this.product.Code ? `editing_childProduct_${this.product.Code}` : null;
+
+      if (keyById) {
+        localStorage.setItem(keyById, JSON.stringify(payload));
+      }
+
+      // Also write by Code to help recovery when Id is missing or Code changed
+      if (keyByCode) {
+        localStorage.setItem(keyByCode, JSON.stringify(payload));
+      }
+    } catch (err) {
+      console.error('Failed to save product to localStorage:', err);
     }
   }
 
@@ -467,9 +511,16 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
 
       child.Edited = true;
 
-      // Save child to localStorage using Id
-      if (child.Id) {
-        localStorage.setItem(`editing_childProduct_${child.Id}`, JSON.stringify(child));
+      // Save child to localStorage using Id (and Code fallback)
+      try {
+        if (child.Id) {
+          localStorage.setItem(`editing_childProduct_${child.Id}`, JSON.stringify(child));
+        }
+        if (child.Code) {
+          localStorage.setItem(`editing_childProduct_${child.Code}`, JSON.stringify(child));
+        }
+      } catch (err) {
+        console.error('Failed to save child to localStorage:', err);
       }
 
       return child; // Return the modified child for map
@@ -486,8 +537,15 @@ export class ProductRowComponent implements OnInit, AfterViewInit {
       this.childProducts[childIndex] = editedChild;
 
       // Save child to localStorage
-      if (editedChild.Id) {
-        localStorage.setItem(`editing_childProduct_${editedChild.Id}`, JSON.stringify(editedChild));
+      try {
+        if (editedChild.Id) {
+          localStorage.setItem(`editing_childProduct_${editedChild.Id}`, JSON.stringify(editedChild));
+        }
+        if (editedChild.Code) {
+          localStorage.setItem(`editing_childProduct_${editedChild.Code}`, JSON.stringify(editedChild));
+        }
+      } catch (err) {
+        console.error('Failed to save editedChild to localStorage:', err);
       }
 
       this.emitChildrenChange();
